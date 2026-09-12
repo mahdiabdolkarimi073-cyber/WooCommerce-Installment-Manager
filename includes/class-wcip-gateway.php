@@ -28,16 +28,20 @@ if (!class_exists('WC_Gateway_WCIP_Installment')) {
         public function __construct()
         {
             $this->id                 = self::GATEWAY_ID;
+            $this->plugin_id          = 'woocommerce_';
             $this->method_title       = __('پرداخت اقساطی', 'wc-installment');
             $this->method_description = __('درگاه پرداخت اقساطی — پیش‌پرداخت در زمان خرید و مابقی اقساط طبق زمان‌بندی تعیین‌شده.', 'wc-installment');
-            $this->title              = $this->get_option('title', __('پرداخت اقساطی', 'wc-installment'));
-            $this->description        = $this->get_option('description', __('با انتخاب این روش، مبلغ پیش‌پرداخت در زمان خرید پرداخت می‌شود و اقساط بعدی طبق تاریخ سررسید قابل پرداخت خواهند بود.', 'wc-installment'));
             $this->has_fields         = false;
             $this->supports           = array('products');
 
-            // Initialize gateway settings.
+            // Initialize gateway settings before reading options.
             $this->init_form_fields();
             $this->init_settings();
+
+            // Read options (will use saved settings or defaults).
+            $this->title              = $this->get_option('title', __('پرداخت اقساطی', 'wc-installment'));
+            $this->description        = $this->get_option('description', __('با انتخاب این روش، مبلغ پیش‌پرداخت در زمان خرید پرداخت می‌شود و اقساط بعدی طبق تاریخ سررسید قابل پرداخت خواهند بود.', 'wc-installment'));
+            $this->enabled            = $this->get_option('enabled', 'yes');
 
             // Save settings via WooCommerce settings API.
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
@@ -96,30 +100,35 @@ if (!class_exists('WC_Gateway_WCIP_Installment')) {
             }
 
             $has_installment = false;
-            $total_down = 0;
 
             foreach (WC()->cart->get_cart() as $cart_item) {
                 if (!empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment') {
                     $has_installment = true;
-                    $down = isset($cart_item['wcip_down_payment']) ? floatval($cart_item['wcip_down_payment']) : 0;
-                    $qty = $cart_item['quantity'] ? $cart_item['quantity'] : 1;
-                    $total_down += $down * $qty;
+                    break;
                 }
             }
 
-            // Always remove the custom installment gateway — real gateways handle the down payment.
-            if (isset($gateways[self::GATEWAY_ID])) {
-                unset($gateways[self::GATEWAY_ID]);
+            if (function_exists('wcip_debug_log')) {
+                wcip_debug_log('Gateway filter: checkout payment gateways', array(
+                    'has_installment' => $has_installment ? 'yes' : 'no',
+                    'gateway_ids'     => array_keys($gateways),
+                    'custom_gateway_present' => isset($gateways[self::GATEWAY_ID]) ? 'yes' : 'no',
+                    'enabled_setting' => $this->enabled,
+                ));
             }
 
-            // If the cart has installment items with zero down payment,
-            // we need a "free order" flow. WooCommerce handles 0-total orders
-            // automatically if no gateways are available.
-            if ($has_installment && $total_down <= 0) {
-                // Remove all gateways — WooCommerce will process the free order.
-                $gateways = array();
+            if (!$has_installment) {
+                // No installment items in cart — remove the custom gateway.
+                if (isset($gateways[self::GATEWAY_ID])) {
+                    unset($gateways[self::GATEWAY_ID]);
+                }
+                return $gateways;
             }
 
+            // Cart has installment items — keep the custom gateway so the
+            // customer sees "پرداخت اقساطی" as a payment option. Real gateways
+            // remain available too, so the customer can also pay the down
+            // payment through any active gateway.
             return $gateways;
         }
 

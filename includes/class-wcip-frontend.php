@@ -263,6 +263,15 @@ if (!class_exists('WCIP_Frontend')) {
             $payment_method = isset($_POST['wcip_selected_method']) ? sanitize_text_field(wp_unslash($_POST['wcip_selected_method'])) : 'cash';
             $selected_plan = isset($_POST['wcip_selected_plan']) ? sanitize_text_field(wp_unslash($_POST['wcip_selected_plan'])) : '';
 
+            if (function_exists('wcip_debug_log')) {
+                wcip_debug_log('add_cart_item_data: checking POST data', array(
+                    'product_id'     => $product_id,
+                    'payment_method'  => $payment_method,
+                    'selected_plan'   => $selected_plan,
+                    'has_post_data'   => !empty($_POST) ? 'yes' : 'no',
+                ));
+            }
+
             if ($payment_method === 'installment' && $selected_plan !== '') {
                 $cart_item_data['wcip_payment_method'] = 'installment';
                 $cart_item_data['wcip_selected_plan'] = $selected_plan;
@@ -382,6 +391,17 @@ if (!class_exists('WCIP_Frontend')) {
                 'unique_key'               => md5(microtime() . rand()),
             );
 
+            if (function_exists('wcip_debug_log')) {
+                wcip_debug_log('AJAX add-to-cart: adding installment item', array(
+                    'product_id'   => $product_id,
+                    'plan_idx'     => $plan_idx,
+                    'months'       => $plan['months'],
+                    'down_payment' => $calc['down_payment'],
+                    'monthly'      => $calc['monthly_installment'],
+                    'total_payable'=> $calc['total_payable'],
+                ));
+            }
+
             $cart_item_key = WC()->cart->add_to_cart(
                 $product_id,
                 $quantity,
@@ -391,10 +411,23 @@ if (!class_exists('WCIP_Frontend')) {
             );
 
             if (!$cart_item_key) {
+                if (function_exists('wcip_debug_log')) {
+                    wcip_debug_log('AJAX add-to-cart: add_to_cart failed', array(
+                        'product_id' => $product_id,
+                        'wc_errors'  => WC()->cart->get_cart_errors() ? 'yes' : 'no',
+                    ));
+                }
                 wp_send_json_error(array('message' => __('خطا در افزودن به سبد.', 'wc-installment')));
             }
 
             WC()->cart->calculate_totals();
+
+            if (function_exists('wcip_debug_log')) {
+                wcip_debug_log('AJAX add-to-cart: success, redirecting to checkout', array(
+                    'cart_item_key' => $cart_item_key,
+                    'cart_count'    => count(WC()->cart->get_cart()),
+                ));
+            }
 
             wp_send_json_success(array(
                 'redirect_url' => wc_get_checkout_url(),

@@ -262,6 +262,22 @@ function wcip_frontend_assets()
         );
     }
 
+    // Enqueue on cart and checkout for the installment toggle selector.
+    if (is_cart() || is_checkout()) {
+        wp_enqueue_script(
+            'wcip-frontend-script',
+            WCIP_PLUGIN_URL . 'assets/js/frontend.js',
+            array('jquery'),
+            WCIP_VERSION,
+            true
+        );
+
+        wp_localize_script('wcip-frontend-script', 'wcipToggle', array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce'   => wp_create_nonce('wcip-toggle-installment'),
+        ));
+    }
+
     // Enqueue on My Account page for the installments feature.
     if (is_account_page()) {
         wp_enqueue_style(

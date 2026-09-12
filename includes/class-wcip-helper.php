@@ -10,6 +10,33 @@ if (!defined('ABSPATH')) {
 }
 
 /**
+ * Writes a diagnostic entry to the WooCommerce log.
+ *
+ * @param string $message Log message.
+ * @param array  $context Additional non-sensitive context.
+ */
+function wcip_debug_log($message, $context = array())
+{
+    if (!function_exists('wc_get_logger')) {
+        return;
+    }
+
+    $safe_context = array();
+    foreach ((array) $context as $key => $value) {
+        if (is_scalar($value) || null === $value) {
+            $safe_context[sanitize_key($key)] = $value;
+        } else {
+            $safe_context[sanitize_key($key)] = wp_json_encode($value);
+        }
+    }
+
+    wc_get_logger()->info($message, array(
+        'source'  => 'wc-installment',
+        'context' => $safe_context,
+    ));
+}
+
+/**
  * Retrieves a global setting value with a fallback default.
  *
  * @param string $key     Setting key.
@@ -110,7 +137,16 @@ function wcip_get_product_plans($product_id)
 function wcip_is_installment_enabled_for_product($product_id)
 {
     $settings = wcip_get_product_installment_settings($product_id);
-    return !empty($settings['enabled']);
+    $enabled = !empty($settings['enabled']);
+
+    wcip_debug_log('Product installment availability checked.', array(
+        'product_id' => absint($product_id),
+        'enabled'    => $enabled ? 'yes' : 'no',
+        'meta_enabled' => get_post_meta($product_id, '_wcip_enabled', true),
+        'use_global' => get_post_meta($product_id, '_wcip_use_global', true),
+    ));
+
+    return $enabled;
 }
 
 /**

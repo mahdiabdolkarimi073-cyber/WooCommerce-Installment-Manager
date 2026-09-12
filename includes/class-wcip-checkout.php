@@ -43,6 +43,14 @@ if (!class_exists('WCIP_Checkout')) {
             add_action('woocommerce_checkout_create_order', array($this, 'save_order_installment_meta'), 10, 2);
             add_action('woocommerce_checkout_create_order_line_item', array($this, 'save_order_line_item_meta'), 10, 4);
             add_action('woocommerce_order_details_after_order_table', array($this, 'display_order_received_breakdown'));
+
+            // Checkout review: render installment toggle for eligible products.
+            add_action('woocommerce_review_order_after_cart_contents', array($this, 'render_checkout_installment_selector'));
+            add_action('woocommerce_cart_collaterals', array($this, 'render_cart_installment_selector'));
+
+            // AJAX: apply installment mode to a cart item from checkout/cart.
+            add_action('wp_ajax_wcip_toggle_installment', array($this, 'ajax_toggle_installment'));
+            add_action('wp_ajax_nopriv_wcip_toggle_installment', array($this, 'ajax_toggle_installment'));
         }
 
         /**
@@ -66,6 +74,14 @@ if (!class_exists('WCIP_Checkout')) {
                     $down = isset($cart_item['wcip_down_payment']) ? floatval($cart_item['wcip_down_payment']) : 0;
                     if (isset($cart_item['data']) && is_object($cart_item['data'])) {
                         $cart_item['data']->set_price($down);
+                    }
+
+                    if (function_exists('wcip_debug_log')) {
+                        wcip_debug_log('Cart price adjusted for installment item', array(
+                            'product_id'   => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
+                            'down_payment' => $down,
+                            'original_price' => (isset($cart_item['data']) && is_object($cart_item['data'])) ? $cart_item['data']->get_regular_price() : '',
+                        ));
                     }
                 }
             }
@@ -154,7 +170,19 @@ if (!class_exists('WCIP_Checkout')) {
             $has_installment = false;
             $total_down = 0;
 
+            if (function_exists('wcip_debug_log')) {
+                wcip_debug_log('Checkout: save_order_installment_meta fired', array(
+                    'cart_items' => count($cart->get_cart()),
+                ));
+            }
+
             foreach ($cart->get_cart() as $cart_item) {
+                if (function_exists('wcip_debug_log')) {
+                    wcip_debug_log('Checkout: cart item check', array(
+                        'product_id'      => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
+                        'payment_method'  => isset($cart_item['wcip_payment_method']) ? $cart_item['wcip_payment_method'] : 'cash',
+                    ));
+                }
                 if (!empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment') {
                     $has_installment = true;
 
@@ -209,6 +237,267 @@ if (!class_exists('WCIP_Checkout')) {
             $item->add_meta_data(__('مبلغ هر قسط', 'wc-installment'), wcip_format_toman($monthly));
             $item->add_meta_data(__('تعداد اقساط', 'wc-installment'), number_to_persian($months) . ' ' . __('ماه', 'wc-installment'));
             $item->add_meta_data(__('مجموع قابل پرداخت', 'wc-installment'), wcip_format_toman($total));
+        }
+
+        /**
+         * Renders the installment toggle selector on the checkout review page.
+         * Shows a "pay in installments" option for each eligible cart item that
+         * is not already in installment mode.
+         */
+        public function render_checkout_installment_selector()
+        {
+            if (!WC()->cart) {
+                return;
+            }
+
+            $eligible_items = $this->get_eligible_cart_items();
+
+            if (empty($eligible_items)) {
+                return;
+            }
+
+            $nonce = wp_create_nonce('wcip-toggle-installment');
+            ?>
+            <tr class="wcip-checkout-installment-row">
+                <td colspan="2">
+                    <div class="wcip-checkout-installment-selector">
+                        <h4><?php esc_html_e('پرداخت اقساطی', 'wc-installment'); ?></h4>
+                        <p class="wcip-toggle-desc"><?php esc_html_e('برای هر کالای eligible می‌توانید پرداخت اقساطی را انتخاب کنید:', 'wc-installment'); ?></p>
+                        <?php foreach ($eligible_items as $item) :
+                            $plans = wcip_get_product_plans($item['product_id']);
+                            ?>
+                            <div class="wcip-toggle-item" data-cart-key="<?php echo esc_attr($item['cart_item_key']); ?>">
+                                <label class="wcip-toggle-label">
+                                    <input type="checkbox"
+                                           class="wcip-installment-toggle"
+                                           data-cart-key="<?php echo esc_attr($item['cart_item_key']); ?>"
+                                           data-product-id="<?php echo esc_attr($item['product_id']); ?>"
+                                           data-nonce="<?php echo esc_attr($nonce); ?>"
+                                           <?php checked($item['is_installment'], true); ?> />
+                                    <span><?php echo esc_html($item['product_name']); ?></span>
+                                </label>
+                                <select class="wcip-plan-select"
+                                        data-cart-key="<?php echo esc_attr($item['cart_item_key']); ?>"
+                                        data-product-id="<?php echo esc_attr($item['product_id']); ?>"
+                                        data-nonce="<?php echo esc_attr($nonce); ?>"
+                                        <?php echo $item['is_installment'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php foreach ($plans as $idx => $plan) : ?>
+                                        <option value="<?php echo esc_attr($idx); ?>"
+                                            <?php echo ($item['is_installment'] && isset($item['plan_idx']) && $item['plan_idx'] == $idx) ? 'selected' : ''; ?>>
+                                            <?php echo esc_html(number_to_persian($plan['months']) . ' ' . __('ماه', 'wc-installment')); ?>
+                                            <?php if ($plan['interest_rate'] > 0) : ?>
+                                                — <?php echo esc_html(sprintf(__('سود %s%%', 'wc-installment'), number_to_persian($plan['interest_rate']))); ?>
+                                            <?php else : ?>
+                                                — <?php esc_html_e('بدون سود', 'wc-installment'); ?>
+                                            <?php endif; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <span class="wcip-toggle-breakdown" data-cart-key="<?php echo esc_attr($item['cart_item_key']); ?>">
+                                    <?php if ($item['is_installment']) :
+                                        $this->render_toggle_breakdown($item);
+                                    endif; ?>
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </td>
+            </tr>
+            <?php
+        }
+
+        /**
+         * Renders the installment toggle on the cart page (below cart collaterals).
+         */
+        public function render_cart_installment_selector()
+        {
+            if (!is_cart() || !WC()->cart) {
+                return;
+            }
+
+            $this->render_checkout_installment_selector();
+        }
+
+        /**
+         * Returns cart items eligible for installment mode.
+         *
+         * @return array List of eligible items with product info.
+         */
+        private function get_eligible_cart_items()
+        {
+            $eligible = array();
+
+            foreach (WC()->cart->get_cart() as $cart_item_key => $cart_item) {
+                $product_id = isset($cart_item['product_id']) ? $cart_item['product_id'] : 0;
+                if (!$product_id) {
+                    continue;
+                }
+
+                if (!wcip_is_installment_enabled_for_product($product_id)) {
+                    continue;
+                }
+
+                $product = wc_get_product($product_id);
+                if (!$product) {
+                    continue;
+                }
+
+                $is_installment = !empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment';
+                $plan_idx = isset($cart_item['wcip_selected_plan']) ? intval($cart_item['wcip_selected_plan']) : 0;
+
+                $eligible[] = array(
+                    'cart_item_key'   => $cart_item_key,
+                    'product_id'      => $product_id,
+                    'product_name'    => $product->get_name(),
+                    'is_installment'  => $is_installment,
+                    'plan_idx'        => $plan_idx,
+                    'cart_item'       => $cart_item,
+                );
+            }
+
+            if (function_exists('wcip_debug_log')) {
+                wcip_debug_log('Checkout selector: eligible cart items', array(
+                    'count'         => count($eligible),
+                    'product_ids'   => wp_list_pluck($eligible, 'product_id'),
+                ));
+            }
+
+            return $eligible;
+        }
+
+        /**
+         * Renders a breakdown preview for a toggled item.
+         *
+         * @param array $item Eligible item data.
+         */
+        private function render_toggle_breakdown($item)
+        {
+            $cart_item = $item['cart_item'];
+            $down = isset($cart_item['wcip_down_payment']) ? $cart_item['wcip_down_payment'] : 0;
+            $monthly = isset($cart_item['wcip_monthly_installment']) ? $cart_item['wcip_monthly_installment'] : 0;
+            $months = isset($cart_item['wcip_plan_months']) ? $cart_item['wcip_plan_months'] : 0;
+            $total = isset($cart_item['wcip_total_payable']) ? $cart_item['wcip_total_payable'] : 0;
+            ?>
+            <small class="wcip-toggle-breakdown-text">
+                <strong><?php esc_html_e('پیش‌پرداخت:', 'wc-installment'); ?></strong> <?php echo esc_html(wcip_format_toman($down)); ?>
+                | <strong><?php esc_html_e('هر قسط:', 'wc-installment'); ?></strong> <?php echo esc_html(wcip_format_toman($monthly)); ?>
+                | <strong><?php esc_html_e('تعداد:', 'wc-installment'); ?></strong> <?php echo esc_html(number_to_persian($months) . ' ' . __('ماه', 'wc-installment')); ?>
+                | <strong><?php esc_html_e('مجموع:', 'wc-installment'); ?></strong> <?php echo esc_html(wcip_format_toman($total)); ?>
+            </small>
+            <?php
+        }
+
+        /**
+         * AJAX handler: toggles installment mode for a cart item from checkout/cart.
+         * Applies or removes installment data on the cart item and recalculates totals.
+         */
+        public function ajax_toggle_installment()
+        {
+            check_ajax_referer('wcip-toggle-installment', 'nonce');
+
+            $cart_item_key = isset($_POST['cart_item_key']) ? sanitize_text_field(wp_unslash($_POST['cart_item_key'])) : '';
+            $product_id    = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+            $enable        = isset($_POST['enable']) ? ($_POST['enable'] === 'true' || $_POST['enable'] === '1') : false;
+            $plan_idx      = isset($_POST['plan_idx']) ? intval($_POST['plan_idx']) : 0;
+
+            if (empty($cart_item_key) || $product_id < 1) {
+                wp_send_json_error(array('message' => __('پارامتر نامعتبر.', 'wc-installment')));
+            }
+
+            if (!wcip_is_installment_enabled_for_product($product_id)) {
+                wp_send_json_error(array('message' => __('اقساط برای این محصول فعال نیست.', 'wc-installment')));
+            }
+
+            $cart = WC()->cart;
+            if (!$cart) {
+                wp_send_json_error(array('message' => __('سبد در دسترس نیست.', 'wc-installment')));
+            }
+
+            $cart_item = $cart->get_cart_item($cart_item_key);
+            if (!$cart_item) {
+                wp_send_json_error(array('message' => __('آیتم سبد یافت نشد.', 'wc-installment')));
+            }
+
+            if (function_exists('wcip_debug_log')) {
+                wcip_debug_log('AJAX toggle: request received', array(
+                    'cart_item_key' => $cart_item_key,
+                    'product_id'    => $product_id,
+                    'enable'        => $enable ? 'yes' : 'no',
+                    'plan_idx'      => $plan_idx,
+                ));
+            }
+
+            if ($enable) {
+                $plans = wcip_get_product_plans($product_id);
+                if (!isset($plans[$plan_idx])) {
+                    $plan_idx = 0;
+                }
+                if (!isset($plans[$plan_idx])) {
+                    wp_send_json_error(array('message' => __('طرح اقساطی موجود نیست.', 'wc-installment')));
+                }
+
+                $plan = $plans[$plan_idx];
+                $calc = WCIP_Calculator::instance()->calculate_product_plan(
+                    $product_id,
+                    $plan['months'],
+                    $plan['interest_rate']
+                );
+
+                if (!$calc) {
+                    wp_send_json_error(array('message' => __('خطا در محاسبه اقساط.', 'wc-installment')));
+                }
+
+                $cart->cart_contents[$cart_item_key]['wcip_payment_method']      = 'installment';
+                $cart->cart_contents[$cart_item_key]['wcip_selected_plan']       = strval($plan_idx);
+                $cart->cart_contents[$cart_item_key]['wcip_plan_months']         = $plan['months'];
+                $cart->cart_contents[$cart_item_key]['wcip_plan_interest']       = $plan['interest_rate'];
+                $cart->cart_contents[$cart_item_key]['wcip_down_payment']        = $calc['down_payment'];
+                $cart->cart_contents[$cart_item_key]['wcip_monthly_installment'] = $calc['monthly_installment'];
+                $cart->cart_contents[$cart_item_key]['wcip_total_payable']       = $calc['total_payable'];
+
+                if (function_exists('wcip_debug_log')) {
+                    wcip_debug_log('AJAX toggle: installment enabled', array(
+                        'cart_item_key'  => $cart_item_key,
+                        'plan_idx'       => $plan_idx,
+                        'months'         => $plan['months'],
+                        'down_payment'   => $calc['down_payment'],
+                        'monthly'        => $calc['monthly_installment'],
+                        'total_payable'  => $calc['total_payable'],
+                    ));
+                }
+            } else {
+                unset(
+                    $cart->cart_contents[$cart_item_key]['wcip_payment_method'],
+                    $cart->cart_contents[$cart_item_key]['wcip_selected_plan'],
+                    $cart->cart_contents[$cart_item_key]['wcip_plan_months'],
+                    $cart->cart_contents[$cart_item_key]['wcip_plan_interest'],
+                    $cart->cart_contents[$cart_item_key]['wcip_down_payment'],
+                    $cart->cart_contents[$cart_item_key]['wcip_monthly_installment'],
+                    $cart->cart_contents[$cart_item_key]['wcip_total_payable']
+                );
+
+                if (function_exists('wcip_debug_log')) {
+                    wcip_debug_log('AJAX toggle: installment disabled', array(
+                        'cart_item_key' => $cart_item_key,
+                    ));
+                }
+            }
+
+            $cart->calculate_totals();
+
+            $breakdown_html = '';
+            if ($enable) {
+                ob_start();
+                $this->render_toggle_breakdown(array(
+                    'cart_item' => $cart->get_cart_item($cart_item_key),
+                ));
+                $breakdown_html = ob_get_clean();
+            }
+
+            wp_send_json_success(array(
+                'breakdown_html' => $breakdown_html,
+                'cart_total'     => $cart->get_cart_contents_total(),
+            ));
         }
 
         /**

@@ -684,4 +684,135 @@
         });
     }
 
+    /* ===== Checkout/Cart Installment Toggle ===== */
+
+    function initCheckoutInstallmentToggle() {
+        if (typeof wcipToggle === 'undefined') {
+            return;
+        }
+
+        $(document).on('change', '.wcip-installment-toggle', function () {
+            var $checkbox = $(this);
+            var cartKey = $checkbox.data('cart-key');
+            var productId = $checkbox.data('product-id');
+            var nonce = $checkbox.data('nonce');
+            var enable = $checkbox.is(':checked');
+
+            var $row = $checkbox.closest('.wcip-toggle-item');
+            var $planSelect = $row.find('.wcip-plan-select');
+            var $breakdown = $row.find('.wcip-toggle-breakdown');
+
+            if (enable) {
+                $planSelect.slideDown(200);
+            } else {
+                $planSelect.slideUp(200);
+                $breakdown.empty();
+            }
+
+            var planIdx = 0;
+            if (enable) {
+                planIdx = parseInt($planSelect.val(), 10) || 0;
+            }
+
+            $checkbox.prop('disabled', true);
+
+            $.ajax({
+                url: wcipToggle.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'wcip_toggle_installment',
+                    nonce: nonce,
+                    cart_item_key: cartKey,
+                    product_id: productId,
+                    enable: enable ? 'true' : 'false',
+                    plan_idx: planIdx
+                },
+                success: function (response) {
+                    $checkbox.prop('disabled', false);
+
+                    if (!response.success) {
+                        $checkbox.prop('checked', !enable);
+                        $planSelect.slideUp(200);
+                        $breakdown.empty();
+                        var msg = response.data && response.data.message ? response.data.message : 'خطا.';
+                        alert(msg);
+                        return;
+                    }
+
+                    if (enable && response.data.breakdown_html) {
+                        $breakdown.html(response.data.breakdown_html);
+                    }
+
+                    $(document.body).trigger('update_checkout');
+                    if (typeof is_cart === 'function' && is_cart()) {
+                        $(document.body).trigger('update_cart');
+                    }
+                },
+                error: function () {
+                    $checkbox.prop('disabled', false);
+                    $checkbox.prop('checked', !enable);
+                    $planSelect.slideUp(200);
+                    $breakdown.empty();
+                    alert('خطا در ارتباط با سرور.');
+                }
+            });
+        });
+
+        $(document).on('change', '.wcip-plan-select', function () {
+            var $select = $(this);
+            var cartKey = $select.data('cart-key');
+            var productId = $select.data('product-id');
+            var nonce = $select.data('nonce');
+            var planIdx = parseInt($select.val(), 10) || 0;
+
+            var $row = $select.closest('.wcip-toggle-item');
+            var $checkbox = $row.find('.wcip-installment-toggle');
+            var $breakdown = $row.find('.wcip-toggle-breakdown');
+
+            if (!$checkbox.is(':checked')) {
+                return;
+            }
+
+            $select.prop('disabled', true);
+
+            $.ajax({
+                url: wcipToggle.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'wcip_toggle_installment',
+                    nonce: nonce,
+                    cart_item_key: cartKey,
+                    product_id: productId,
+                    enable: 'true',
+                    plan_idx: planIdx
+                },
+                success: function (response) {
+                    $select.prop('disabled', false);
+
+                    if (!response.success) {
+                        var msg = response.data && response.data.message ? response.data.message : 'خطا.';
+                        alert(msg);
+                        return;
+                    }
+
+                    if (response.data.breakdown_html) {
+                        $breakdown.html(response.data.breakdown_html);
+                    }
+
+                    $(document.body).trigger('update_checkout');
+                    if (typeof is_cart === 'function' && is_cart()) {
+                        $(document.body).trigger('update_cart');
+                    }
+                },
+                error: function () {
+                    $select.prop('disabled', false);
+                    alert('خطا در ارتباط با سرور.');
+                }
+            });
+        });
+    }
+
+    $(document).ready(function () {
+        initCheckoutInstallmentToggle();
+    });
 })(jQuery);
