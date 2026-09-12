@@ -619,3 +619,125 @@
     color: #721c24;
     border: 1px solid #f5c6cb;
 }
+
+/* ===== Top-level Dashboard Page ===== */
+
+.wcip-dashboard-wrap {
+    direction: rtl;
+}
+
+.wcip-dashboard-cards {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+}
+
+.wcip-dashboard-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 24px 32px;
+    min-width: 160px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.wcip-dashboard-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.wcip-card-icon {
+    font-size: 28px;
+    color: #2271b1;
+    margin-bottom: 4px;
+}
+
+.wcip-card-number {
+    font-size: 28px;
+    font-weight: 700;
+    color: #333;
+}
+
+.wcip-card-label {
+    font-size: 13px;
+    color: #777;
+    font-weight: 500;
+}
+
+.wcip-card-paid .wcip-card-icon {
+    color: #2a8a2a;
+}
+
+.wcip-card-paid .wcip-card-number {
+    color: #2a8a2a;
+}
+
+.wcip-card-unpaid .wcip-card-icon {
+    color: #c8800c;
+}
+
+.wcip-card-unpaid .wcip-card-number {
+    color: #c8800c;
+}
+
+.wcip-card-overdue .wcip-card-icon {
+    color: #c03030;
+}
+
+.wcip-card-overdue .wcip-card-number {
+    color: #c03030;
+}
+
+.wcip-dashboard-amounts {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+    max-width: 500px;
+}
+
+.wcip-amount-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 14px;
+}
+
+.wcip-amount-row:last-child {
+    border-bottom: none;
+}
+
+.wcip-amount-label {
+    color: #555;
+    font-weight: 500;
+}
+
+.wcip-amount-value {
+    font-weight: 700;
+    color: #333;
+}
+
+.wcip-dashboard-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+@media screen and (max-width: 782px) {
+    .wcip-dashboard-card {
+        min-width: 140px;
+        padding: 16px 20px;
+    }
+
+    .wcip-card-number {
+        font-size: 22px;
+    }
+}

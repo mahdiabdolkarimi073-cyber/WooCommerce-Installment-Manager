@@ -109,9 +109,6 @@ function wcip_get_product_plans($product_id)
  */
 function wcip_is_installment_enabled_for_product($product_id)
 {
-    if (wcip_get_global_setting('enabled', 'no') !== 'yes') {
-        return false;
-    }
     $settings = wcip_get_product_installment_settings($product_id);
     return !empty($settings['enabled']);
 }

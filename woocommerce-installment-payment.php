@@ -129,6 +129,9 @@ function wcip_init_plugin()
     // Payment gateway auto-detector
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-gateway-detector.php';
 
+    // Custom installment payment gateway
+    require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-gateway.php';
+
     // Payment gateway integration
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-payment.php';
 
@@ -149,6 +152,9 @@ function wcip_init_plugin()
 
     // Early settlement (customer request + admin approval with discount)
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-settlement.php';
+
+    // Register the installment payment gateway with WooCommerce.
+    add_filter('woocommerce_payment_gateways', 'wcip_register_installment_gateway');
 
     // Run database upgrade/migration check.
     WCIP_DB::instance()->maybe_upgrade();
@@ -274,3 +280,248 @@ function wcip_frontend_assets()
     }
 }
 add_action('wp_enqueue_scripts', 'wcip_frontend_assets');
+
+/**
+ * Registers the installment payment gateway with WooCommerce.
+ *
+ * @param array $gateways Existing payment gateways.
+ * @return array
+ */
+function wcip_register_installment_gateway($gateways)
+{
+    $gateways[] = 'WC_Gateway_WCIP_Installment';
+    return $gateways;
+}
+
+/**
+ * Adds a top-level admin menu for the installment plugin with quick links
+ * to settings, installments management, and reports.
+ */
+function wcip_add_admin_top_menu()
+{
+    add_menu_page(
+        __('پرداخت اقساطی', 'wc-installment'),
+        __('پرداخت اقساطی', 'wc-installment'),
+        'manage_woocommerce',
+        'wcip-dashboard',
+        'wcip_render_dashboard_page',
+        'dashicons-calendar-alt',
+        56
+    );
+
+    add_submenu_page(
+        'wcip-dashboard',
+        __('داشبورد', 'wc-installment'),
+        __('داشبورد', 'wc-installment'),
+        'manage_woocommerce',
+        'wcip-dashboard',
+        'wcip_render_dashboard_page'
+    );
+
+    add_submenu_page(
+        'wcip-dashboard',
+        __('تنظیمات اقساط', 'wc-installment'),
+        __('تنظیمات اقساط', 'wc-installment'),
+        'manage_woocommerce',
+        'wcip-settings',
+        'wcip_render_settings_redirect_page'
+    );
+
+    add_submenu_page(
+        'wcip-dashboard',
+        __('مدیریت اقساط', 'wc-installment'),
+        __('مدیریت اقساط', 'wc-installment'),
+        'manage_woocommerce',
+        'wcip-installments-link',
+        'wcip_render_installments_redirect_page'
+    );
+
+    add_submenu_page(
+        'wcip-dashboard',
+        __('گزارشات و تسویه', 'wc-installment'),
+        __('گزارشات و تسویه', 'wc-installment'),
+        'manage_woocommerce',
+        'wcip-reports-link',
+        'wcip_render_reports_redirect_page'
+    );
+
+    add_submenu_page(
+        'wcip-dashboard',
+        __('درخواست‌های تسویه', 'wc-installment'),
+        __('درخواست‌های تسویه', 'wc-installment'),
+        'manage_woocommerce',
+        'wcip-settlement-link',
+        'wcip_render_settlement_redirect_page'
+    );
+}
+add_action('admin_menu', 'wcip_add_admin_top_menu');
+
+/**
+ * Renders the dashboard page with summary cards and quick links.
+ */
+function wcip_render_dashboard_page()
+{
+    if (!current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+        echo '<p>' . esc_html__('شما اجازه دسترسی به این صفحه را ندارید.', 'wc-installment') . '</p>';
+        return;
+    }
+
+    $db = WCIP_DB::instance();
+    $all_installments = $db->get_installments(array('per_page' => 10000, 'page' => 1));
+    $total_count = count($all_installments);
+    $paid_count = 0;
+    $unpaid_count = 0;
+    $overdue_count = 0;
+    $total_amount = 0;
+    $paid_amount = 0;
+
+    foreach ($all_installments as $inst) {
+        $dyn = $db->compute_dynamic_status($inst);
+        $total_amount += floatval($inst->amount);
+        if ($dyn === 'paid') {
+            $paid_count++;
+            $paid_amount += floatval($inst->amount);
+        } elseif ($dyn === 'overdue') {
+            $overdue_count++;
+            $unpaid_count++;
+        } else {
+            $unpaid_count++;
+        }
+    }
+
+    $remaining_amount = $total_amount - $paid_amount;
+    ?>
+    <div class="wrap wcip-dashboard-wrap">
+        <h1><?php esc_html_e('پرداخت اقساطی — داشبورد', 'wc-installment'); ?></h1>
+
+        <div class="wcip-dashboard-cards">
+            <div class="wcip-dashboard-card">
+                <span class="wcip-card-icon dashicons dashicons-calendar-alt"></span>
+                <span class="wcip-card-number"><?php echo esc_html(number_to_persian($total_count)); ?></span>
+                <span class="wcip-card-label"><?php esc_html_e('کل اقساط', 'wc-installment'); ?></span>
+            </div>
+            <div class="wcip-dashboard-card wcip-card-paid">
+                <span class="wcip-card-icon dashicons dashicons-yes-alt"></span>
+                <span class="wcip-card-number"><?php echo esc_html(number_to_persian($paid_count)); ?></span>
+                <span class="wcip-card-label"><?php esc_html_e('پرداخت‌شده', 'wc-installment'); ?></span>
+            </div>
+            <div class="wcip-dashboard-card wcip-card-unpaid">
+                <span class="wcip-card-icon dashicons dashicons-clock"></span>
+                <span class="wcip-card-number"><?php echo esc_html(number_to_persian($unpaid_count)); ?></span>
+                <span class="wcip-card-label"><?php esc_html_e('در انتظار پرداخت', 'wc-installment'); ?></span>
+            </div>
+            <div class="wcip-dashboard-card wcip-card-overdue">
+                <span class="wcip-card-icon dashicons dashicons-warning"></span>
+                <span class="wcip-card-number"><?php echo esc_html(number_to_persian($overdue_count)); ?></span>
+                <span class="wcip-card-label"><?php esc_html_e('معوق', 'wc-installment'); ?></span>
+            </div>
+        </div>
+
+        <div class="wcip-dashboard-amounts">
+            <div class="wcip-amount-row">
+                <span class="wcip-amount-label"><?php esc_html_e('مبلغ کل اقساط:', 'wc-installment'); ?></span>
+                <span class="wcip-amount-value"><?php echo esc_html(wcip_format_toman($total_amount)); ?></span>
+            </div>
+            <div class="wcip-amount-row">
+                <span class="wcip-amount-label"><?php esc_html_e('مبلغ پرداخت‌شده:', 'wc-installment'); ?></span>
+                <span class="wcip-amount-value"><?php echo esc_html(wcip_format_toman($paid_amount)); ?></span>
+            </div>
+            <div class="wcip-amount-row">
+                <span class="wcip-amount-label"><?php esc_html_e('مبلغ باقی‌مانده:', 'wc-installment'); ?></span>
+                <span class="wcip-amount-value"><?php echo esc_html(wcip_format_toman($remaining_amount)); ?></span>
+            </div>
+        </div>
+
+        <div class="wcip-dashboard-actions">
+            <a href="<?php echo esc_url(admin_url('admin.php?page=wcip-installments')); ?>" class="button button-primary">
+                <?php esc_html_e('مدیریت اقساط', 'wc-installment'); ?>
+            </a>
+            <a href="<?php echo esc_url(admin_url('admin.php?page=wcip-reports')); ?>" class="button button-primary">
+                <?php esc_html_e('گزارشات و تسویه', 'wc-installment'); ?>
+            </a>
+            <a href="<?php echo esc_url(admin_url('admin.php?page=wcip-settings')); ?>" class="button button-secondary">
+                <?php esc_html_e('تنظیمات اقساط', 'wc-installment'); ?>
+            </a>
+            <a href="<?php echo esc_url(admin_url('admin.php?page=wcip-settlement-requests')); ?>" class="button button-secondary">
+                <?php esc_html_e('درخواست‌های تسویه', 'wc-installment'); ?>
+            </a>
+        </div>
+    </div>
+    <?php
+}
+
+/**
+ * Renders a redirect page that sends the user to the WooCommerce settings tab.
+ */
+function wcip_render_settings_redirect_page()
+{
+    if (!current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+        echo '<p>' . esc_html__('شما اجازه دسترسی به این صفحه را ندارید.', 'wc-installment') . '</p>';
+        return;
+    }
+
+    $settings_url = admin_url('admin.php?page=wc-settings&tab=installment');
+    echo '<div class="wrap">';
+    echo '<h1>' . esc_html__('تنظیمات اقساط', 'wc-installment') . '</h1>';
+    echo '<p>' . esc_html__('در حال انتقال به صفحه تنظیمات...', 'wc-installment') . '</p>';
+    echo '<script type="text/javascript">window.location.href = "' . esc_js($settings_url) . '";</script>';
+    echo '<p><a href="' . esc_url($settings_url) . '" class="button button-primary">' . esc_html__('رفتن به تنظیمات', 'wc-installment') . '</a></p>';
+    echo '</div>';
+}
+
+/**
+ * Renders a redirect page that sends the user to the WooCommerce installments management page.
+ */
+function wcip_render_installments_redirect_page()
+{
+    if (!current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+        echo '<p>' . esc_html__('شما اجازه دسترسی به این صفحه را ندارید.', 'wc-installment') . '</p>';
+        return;
+    }
+
+    $url = admin_url('admin.php?page=wcip-installments');
+    echo '<div class="wrap">';
+    echo '<h1>' . esc_html__('مدیریت اقساط', 'wc-installment') . '</h1>';
+    echo '<p>' . esc_html__('در حال انتقال...', 'wc-installment') . '</p>';
+    echo '<script type="text/javascript">window.location.href = "' . esc_js($url) . '";</script>';
+    echo '<p><a href="' . esc_url($url) . '" class="button button-primary">' . esc_html__('رفتن به مدیریت اقساط', 'wc-installment') . '</a></p>';
+    echo '</div>';
+}
+
+/**
+ * Renders a redirect page that sends the user to the WooCommerce reports page.
+ */
+function wcip_render_reports_redirect_page()
+{
+    if (!current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+        echo '<p>' . esc_html__('شما اجازه دسترسی به این صفحه را ندارید.', 'wc-installment') . '</p>';
+        return;
+    }
+
+    $url = admin_url('admin.php?page=wcip-reports');
+    echo '<div class="wrap">';
+    echo '<h1>' . esc_html__('گزارشات و تسویه', 'wc-installment') . '</h1>';
+    echo '<p>' . esc_html__('در حال انتقال...', 'wc-installment') . '</p>';
+    echo '<script type="text/javascript">window.location.href = "' . esc_js($url) . '";</script>';
+    echo '<p><a href="' . esc_url($url) . '" class="button button-primary">' . esc_html__('رفتن به گزارشات', 'wc-installment') . '</a></p>';
+    echo '</div>';
+}
+
+/**
+ * Renders a redirect page that sends the user to the settlement requests page.
+ */
+function wcip_render_settlement_redirect_page()
+{
+    if (!current_user_can('manage_woocommerce') && !current_user_can('manage_options')) {
+        echo '<p>' . esc_html__('شما اجازه دسترسی به این صفحه را ندارید.', 'wc-installment') . '</p>';
+        return;
+    }
+
+    $url = admin_url('admin.php?page=wcip-settlement-requests');
+    echo '<div class="wrap">';
+    echo '<h1>' . esc_html__('درخواست‌های تسویه', 'wc-installment') . '</h1>';
+    echo '<p>' . esc_html__('در حال انتقال...', 'wc-installment') . '</p>';
+    echo '<script type="text/javascript">window.location.href = "' . esc_js($url) . '";</script>';
+    echo '<p><a href="' . esc_url($url) . '" class="button button-primary">' . esc_html__('رفتن به درخواست‌های تسویه', 'wc-installment') . '</a></p>';
+    echo '</div>';
+}
