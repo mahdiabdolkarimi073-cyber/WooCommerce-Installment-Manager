@@ -3,6 +3,16 @@
 (function ($) {
     'use strict';
 
+    // Localized strings for SMS panel UI.
+    var wsipConnectText = 'اتصال';
+    var wsipLoadingText = 'در حال اتصال...';
+    var wsipConnectedText = 'متصل و فعال';
+    var wsipAvailableText = 'قابل اتصال';
+    var wsipTestSmsText = 'ارسال پیامک آزمایشی';
+    var wsipSendingText = 'در حال ارسال...';
+    var wsipEnterPhoneText = 'شماره تلفن را وارد کنید.';
+    var wsipErrorText = 'خطای ارتباط با سرور.';
+
     $(document).ready(function () {
 
         // Toggle custom fields visibility based on "use global" checkbox.
@@ -72,31 +82,85 @@
         // Initialize indices on load.
         updatePlanIndices();
 
-        // ===== SMS Test Button =====
+        // ===== SMS Panel Connect Buttons =====
 
-        $('#wcip-sms-test-btn').on('click', function (e) {
+        $(document).on('click', '.wcip-connect-sms', function (e) {
             e.preventDefault();
 
             var $btn = $(this);
-            var phone = $('#wcip_sms_test_phone').val();
-            var $msg = $('#wcip-sms-test-result');
+            var panelId = $btn.data('panel-id');
+            var nonce = $btn.data('nonce');
+
+            $btn.prop('disabled', true).text(wsipLoadingText);
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'wcip_connect_sms_panel',
+                    nonce: nonce,
+                    panel_id: panelId
+                },
+                success: function (response) {
+                    if (response.success) {
+                        // Update all badges in the connectable table.
+                        $('.wcip-sms-connectable .wcip-badge').removeClass('wcip-badge-connected')
+                            .addClass('wcip-badge-available')
+                            .text(wsipAvailableText);
+                        // Mark this row as connected.
+                        $btn.closest('tr').find('.wcip-badge')
+                            .removeClass('wcip-badge-available')
+                            .addClass('wcip-badge-connected')
+                            .text(wsipConnectedText);
+                        // Show success message.
+                        $('.wcip-test-sms-result').removeClass('wcip-sms-test-error')
+                            .addClass('wcip-sms-test-success')
+                            .text(response.data.message)
+                            .show();
+                    } else {
+                        $('.wcip-test-sms-result').removeClass('wcip-sms-test-success')
+                            .addClass('wcip-sms-test-error')
+                            .text(response.data.message || wsipErrorText)
+                            .show();
+                    }
+                },
+                error: function () {
+                    $('.wcip-test-sms-result').removeClass('wcip-sms-test-success')
+                        .addClass('wcip-sms-test-error')
+                        .text(wsipErrorText)
+                        .show();
+                },
+                complete: function () {
+                    $btn.prop('disabled', false).text(wsipConnectText);
+                }
+            });
+        });
+
+        // ===== SMS Test Button =====
+
+        $(document).on('click', '.wcip-send-test-sms', function (e) {
+            e.preventDefault();
+
+            var $btn = $(this);
+            var phone = $('#wcip-test-sms-phone').val();
+            var $msg = $('.wcip-test-sms-result');
 
             if (!phone) {
                 $msg.removeClass('wcip-sms-test-success wcip-sms-test-error')
                     .addClass('wcip-sms-test-error')
-                    .text('شماره تلفن را وارد کنید.')
+                    .text(wsipEnterPhoneText)
                     .show();
                 return;
             }
 
-            $btn.prop('disabled', true).text('در حال ارسال...');
+            $btn.prop('disabled', true).text(wsipSendingText);
 
             $.ajax({
                 url: ajaxurl,
                 type: 'POST',
                 data: {
                     action: 'wcip_send_test_sms',
-                    nonce: (typeof wcipAdmin !== 'undefined') ? wcipAdmin.nonce : '',
+                    nonce: $btn.data('nonce'),
                     phone: phone
                 },
                 success: function (response) {
@@ -108,18 +172,18 @@
                     } else {
                         $msg.removeClass('wcip-sms-test-success')
                             .addClass('wcip-sms-test-error')
-                            .text(response.data.message || 'خطا در ارسال پیامک.')
+                            .text(response.data.message || wsipErrorText)
                             .show();
                     }
                 },
                 error: function () {
                     $msg.removeClass('wcip-sms-test-success')
                         .addClass('wcip-sms-test-error')
-                        .text('خطای ارتباط با سرور.')
+                        .text(wsipErrorText)
                         .show();
                 },
                 complete: function () {
-                    $btn.prop('disabled', false).text('ارسال پیامک آزمایشی');
+                    $btn.prop('disabled', false).text(wsipTestSmsText);
                 }
             });
         });

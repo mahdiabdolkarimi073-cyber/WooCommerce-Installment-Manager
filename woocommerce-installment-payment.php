@@ -123,8 +123,11 @@ function wcip_init_plugin()
     // Admin order meta box
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-admin-order.php';
 
-    // SMS notification system
+    // SMS notification system (auto-detects active SMS plugins)
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-sms.php';
+
+    // Payment gateway auto-detector
+    require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-gateway-detector.php';
 
     // Payment gateway integration
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-payment.php';
@@ -159,6 +162,7 @@ function wcip_init_plugin()
     WCIP_Checkout::instance();
     WCIP_Admin_Order::instance();
     WCIP_SMS::instance();
+    WCIP_Gateway_Detector::instance();
     WCIP_Payment::instance();
     WCIP_Admin_Installments::instance();
     WCIP_Reminders::instance();

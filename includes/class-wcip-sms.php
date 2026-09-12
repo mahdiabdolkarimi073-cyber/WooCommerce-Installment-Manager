@@ -2,6 +2,7 @@
 /**
  * SMS notification system — facade that loads the modular SMS subsystem
  * and provides backward-compatible static methods for the rest of the plugin.
+ * Now uses auto-detection instead of direct API integrations.
  *
  * @package WC_Installment_Payment
  */
@@ -10,11 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-require_once WCIP_PLUGIN_DIR . 'includes/sms/providers/interface-sms-provider.php';
-require_once WCIP_PLUGIN_DIR . 'includes/sms/providers/class-provider-kavenegar.php';
-require_once WCIP_PLUGIN_DIR . 'includes/sms/providers/class-provider-smsir.php';
-require_once WCIP_PLUGIN_DIR . 'includes/sms/providers/class-provider-melipayamak.php';
-require_once WCIP_PLUGIN_DIR . 'includes/sms/providers/class-provider-farazsms.php';
+require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-sms-detector.php';
 require_once WCIP_PLUGIN_DIR . 'includes/sms/class-sms-logger.php';
 require_once WCIP_PLUGIN_DIR . 'includes/sms/class-sms-manager.php';
 require_once WCIP_PLUGIN_DIR . 'includes/sms/class-sms-scheduler.php';

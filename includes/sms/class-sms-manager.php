@@ -1,8 +1,8 @@
 <?php
 /**
- * SMS Manager — core orchestration class for the SMS notification system.
- * Handles provider instantiation, message building, template/placeholder
- * replacement, and the actual send-and-log flow.
+ * SMS Manager — core orchestration class for SMS notifications.
+ * Now routes through WCIP_SMS_Detector instead of using its own API keys.
+ * Connects to whatever SMS plugin is already active in WordPress.
  *
  * @package WC_Installment_Payment
  */
@@ -14,8 +14,6 @@ if (!defined('ABSPATH')) {
 class SMS_Manager
 {
     private static $instance = null;
-
-    private $provider = null;
 
     public static function instance()
     {
@@ -29,14 +27,14 @@ class SMS_Manager
     {
     }
 
+    /**
+     * Get all settings — no more API keys, just detection-based config.
+     */
     public function get_settings()
     {
         return array(
             'enabled'           => get_option('wcip_sms_enabled', 'no') === 'yes',
-            'provider'          => get_option('wcip_sms_provider', 'none'),
-            'api_key'           => get_option('wcip_sms_api_key', ''),
-            'sender_number'     => get_option('wcip_sms_sender_number', ''),
-            'username'          => get_option('wcip_sms_username', ''),
+            'selected_panel'    => get_option('wcip_sms_selected_panel', ''),
             'pre_due_days'      => (int) get_option('wcip_sms_pre_due_days', '3'),
             'due_date_enabled'  => get_option('wcip_sms_due_date_enabled', 'yes') === 'yes',
             'overdue_enabled'   => get_option('wcip_sms_overdue_enabled', 'yes') === 'yes',
@@ -50,66 +48,41 @@ class SMS_Manager
         );
     }
 
-    public function get_provider()
-    {
-        if ($this->provider !== null) {
-            return $this->provider;
-        }
-
-        $settings = $this->get_settings();
-        $config = array(
-            'api_key'       => $settings['api_key'],
-            'sender_number' => $settings['sender_number'],
-            'username'      => $settings['username'],
-        );
-
-        $provider = null;
-
-        switch ($settings['provider']) {
-            case 'kavenegar':
-                $provider = new SMS_Provider_Kavenegar($config);
-                break;
-            case 'smsir':
-                $provider = new SMS_Provider_SMSIr($config);
-                break;
-            case 'melipayamak':
-                $provider = new SMS_Provider_Melipayamak($config);
-                break;
-            case 'farazsms':
-                $provider = new SMS_Provider_Farazsms($config);
-                break;
-        }
-
-        $this->provider = $provider;
-        return $provider;
-    }
-
-    public function get_available_providers()
-    {
-        return array(
-            'none'        => __('— انتخاب نکرده —', 'wc-installment'),
-            'kavenegar'   => __('کاوه‌نگار', 'wc-installment'),
-            'smsir'       => __('SMS.ir', 'wc-installment'),
-            'melipayamak' => __('ملی‌پیامک', 'wc-installment'),
-            'farazsms'    => __('فراز SMS', 'wc-installment'),
-        );
-    }
-
+    /**
+     * Check if SMS is enabled and a panel is available.
+     */
     public function is_enabled()
     {
         $settings = $this->get_settings();
-        return $settings['enabled'] && $settings['provider'] !== 'none';
+        if (!$settings['enabled']) {
+            return false;
+        }
+        $panel = WCIP_SMS_Detector::instance()->get_selected();
+        if (!$panel || empty($panel['can_send'])) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Get the detected/selected SMS panel.
+     */
+    public function get_active_panel()
+    {
+        return WCIP_SMS_Detector::instance()->get_selected();
+    }
+
+    /**
+     * Get all detected SMS panels.
+     */
+    public function get_detected_panels()
+    {
+        return WCIP_SMS_Detector::instance()->get_detected();
     }
 
     public function sanitize_phone($phone)
     {
-        $phone = preg_replace('/[^0-9+]/', '', $phone);
-        if (strpos($phone, '+98') === 0) {
-            $phone = '0' . substr($phone, 3);
-        } elseif (strpos($phone, '98') === 0 && strlen($phone) === 12) {
-            $phone = '0' . substr($phone, 2);
-        }
-        return $phone;
+        return WCIP_SMS_Detector::instance()->sanitize_phone($phone);
     }
 
     public function get_customer_phone($user_id, $order_id = 0)
@@ -144,6 +117,9 @@ class SMS_Manager
         return get_bloginfo('name');
     }
 
+    /**
+     * Replace placeholders in a template with installment data.
+     */
     public function replace_placeholders($template, $installment)
     {
         $amount_formatted = wcip_format_toman($installment->amount);
@@ -163,51 +139,37 @@ class SMS_Manager
         return strtr($template, $replacements);
     }
 
+    /**
+     * Send SMS via the detected plugin — no API keys needed.
+     */
     public function send_sms($phone, $message)
     {
-        $phone = $this->sanitize_phone($phone);
-        if (empty($phone)) {
-            return array('success' => false, 'error' => 'invalid_phone');
-        }
-
-        $provider = $this->get_provider();
-        if (!$provider || !$provider->validate_config()) {
-            return array('success' => false, 'error' => 'provider_not_configured');
-        }
-
-        $result = $provider->send($phone, $message);
-
-        return array(
-            'success'    => $result,
-            'provider'   => $provider->get_name(),
-        );
+        return WCIP_SMS_Detector::instance()->send($phone, $message);
     }
 
+    /**
+     * Send an installment-related SMS and log it.
+     */
     public function send_installment_sms($installment, $event_type, $template)
     {
-        $settings = $this->get_settings();
-
         $phone = $this->get_customer_phone($installment->user_id, $installment->order_id);
         if (empty($phone)) {
             return false;
         }
 
         $message = $this->replace_placeholders($template, $installment);
-
         $result = $this->send_sms($phone, $message);
 
-        $log_data = array(
+        SMS_Logger::instance()->log(array(
             'order_id'         => (int) $installment->order_id,
             'installment_id'   => (int) $installment->id,
             'event_type'       => $event_type,
-            'recipient'        => $phone,
+            'recipient'        => $this->sanitize_phone($phone),
             'message'          => $message,
             'status'           => $result['success'] ? 'sent' : 'failed',
             'provider'         => isset($result['provider']) ? $result['provider'] : '',
-            'provider_response'=> '',
-        );
-
-        SMS_Logger::instance()->log($log_data);
+            'provider_response'=> isset($result['error']) ? $result['error'] : '',
+        ));
 
         return $result['success'];
     }
@@ -286,9 +248,8 @@ class SMS_Manager
 
     public function send_test_sms($phone)
     {
-        $settings = $this->get_settings();
         $message = sprintf(
-            __('این یک پیامک آزمایشی از %s است. سیستم پیامک افزونه اقساطی با موفقیت پیکربندی شده است.', 'wc-installment'),
+            __('این یک پیامک آزمایشی از %s است. سیستم پیامک افزونه اقساطی با موفقیت به پنل فعال متصل شده است.', 'wc-installment'),
             $this->get_shop_name()
         );
 

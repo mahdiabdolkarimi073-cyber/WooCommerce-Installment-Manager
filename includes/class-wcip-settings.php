@@ -67,6 +67,29 @@ if (!class_exists('WCIP_Settings')) {
         {
             $settings = array(
 
+                // ===== Payment Gateway Detection =====
+                array(
+                    'title' => __('درگاه‌های پرداخت فعال', 'wc-installment'),
+                    'type'  => 'title',
+                    'desc'  => __('درگاه‌های پرداخت فعال در ووکامرس به‌صورت خودکار شناسایی می‌شوند. نیازی به تنظیم دستی نیست.', 'wc-installment'),
+                    'id'    => 'wcip_section_gateways',
+                ),
+
+                array(
+                    'title'   => __('درگاه پرداخت اقساطی', 'wc-installment'),
+                    'id'      => 'wcip_selected_gateway',
+                    'default' => '',
+                    'type'    => 'select',
+                    'options' => $this->get_gateway_options(),
+                    'desc'    => __('درگاه پرداختی که برای پرداخت اقساط استفاده می‌شود را انتخاب کنید. «انتخاب خودکار» یعنی اولین درگاه فعال.', 'wc-installment'),
+                ),
+
+                array(
+                    'type' => 'sectionend',
+                    'id'   => 'wcip_section_gateways',
+                ),
+
+                // ===== General Installment Settings =====
                 array(
                     'title' => __('تنظیمات سراسری پرداخت اقساطی', 'wc-installment'),
                     'type'  => 'title',
@@ -200,24 +223,42 @@ if (!class_exists('WCIP_Settings')) {
         }
 
         /**
+         * Returns detected payment gateway options for the settings dropdown.
+         *
+         * @return array
+         */
+        public function get_gateway_options()
+        {
+            $options = array('' => __('— انتخاب خودکار —', 'wc-installment'));
+
+            if (class_exists('WCIP_Gateway_Detector')) {
+                $gateways = WCIP_Gateway_Detector::instance()->get_active_gateways_list();
+                foreach ($gateways as $id => $title) {
+                    $options[$id] = $title;
+                }
+            }
+
+            return $options;
+        }
+
+        /**
          * Returns the SMS panel options for the settings dropdown.
-         * Detects installed SMS plugins and merges with the default list.
+         * Detects installed SMS plugins automatically.
          *
          * @return array
          */
         public function get_sms_panel_options()
         {
-            if (class_exists('SMS_Manager')) {
-                return SMS_Manager::instance()->get_available_providers();
+            $options = array('' => __('— انتخاب خودکار —', 'wc-installment'));
+
+            if (class_exists('WCIP_SMS_Detector')) {
+                $panels = WCIP_SMS_Detector::instance()->get_detected();
+                foreach ($panels as $id => $panel) {
+                    $options[$id] = $panel['name'];
+                }
             }
 
-            return array(
-                'none'        => __('— انتخاب نکرده —', 'wc-installment'),
-                'kavenegar'   => __('کاوه‌نگار', 'wc-installment'),
-                'smsir'       => __('SMS.ir', 'wc-installment'),
-                'melipayamak' => __('ملی‌پیامک', 'wc-installment'),
-                'farazsms'    => __('فراز SMS', 'wc-installment'),
-            );
+            return $options;
         }
     }
 }

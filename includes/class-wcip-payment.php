@@ -125,22 +125,13 @@ if (!class_exists('WCIP_Payment')) {
         }
 
         /**
-         * Returns the site's active WooCommerce payment gateways.
+         * Returns the site's active WooCommerce payment gateways via the detector.
          *
          * @return array
          */
         public function get_active_gateways()
         {
-            $available_gateways = WC()->payment_gateways()->get_available_payment_gateways();
-            $gateways = array();
-
-            foreach ($available_gateways as $gateway_id => $gateway) {
-                if ($gateway->enabled === 'yes') {
-                    $gateways[$gateway_id] = $gateway->get_title();
-                }
-            }
-
-            return $gateways;
+            return WCIP_Gateway_Detector::instance()->get_active_gateways_list();
         }
 
         /**
@@ -150,11 +141,7 @@ if (!class_exists('WCIP_Payment')) {
          */
         public function get_default_gateway_id()
         {
-            $gateways = $this->get_active_gateways();
-            if (empty($gateways)) {
-                return null;
-            }
-            return array_key_first($gateways);
+            return WCIP_Gateway_Detector::instance()->get_default_gateway_id();
         }
 
         /**
@@ -213,7 +200,20 @@ if (!class_exists('WCIP_Payment')) {
             $order->set_address($original_order->get_address('shipping'), 'shipping');
             $order->set_customer_id($original_order->get_customer_id());
 
-            $gateway_id = $this->get_default_gateway_id();
+            $gateway_id = get_option('wcip_selected_gateway', '');
+            if (empty($gateway_id)) {
+                $gateway_id = $this->get_default_gateway_id();
+            }
+
+            // Validate that the selected gateway is actually available.
+            if ($gateway_id) {
+                $available = WCIP_Gateway_Detector::instance()->get_available_gateways();
+                if (!isset($available[$gateway_id])) {
+                    // Selected gateway not available — fall back to first available.
+                    $gateway_id = WCIP_Gateway_Detector::instance()->get_default_gateway_id();
+                }
+            }
+
             if ($gateway_id) {
                 $order->set_payment_method($gateway_id);
             }
