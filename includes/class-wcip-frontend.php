@@ -69,6 +69,13 @@ if (!class_exists('WCIP_Frontend')) {
                 );
             }
 
+            $max_months = 0;
+            foreach ($js_plans as $p) {
+                if ($p['months'] > $max_months) {
+                    $max_months = $p['months'];
+                }
+            }
+
             $localized = array(
                 'productId'       => $product_id,
                 'productPrice'    => $price,
@@ -78,6 +85,7 @@ if (!class_exists('WCIP_Frontend')) {
                 'feeType'         => isset($settings['fee_type']) ? $settings['fee_type'] : 'percentage',
                 'feeValue'        => isset($settings['fee_value']) ? floatval($settings['fee_value']) : 0,
                 'plans'           => $js_plans,
+                'maxMonths'       => $max_months,
                 'ajaxUrl'         => admin_url('admin-ajax.php'),
                 'nonce'           => wp_create_nonce('wcip-frontend'),
             );
@@ -134,11 +142,38 @@ if (!class_exists('WCIP_Frontend')) {
                         <?php endif; ?>
                     </div>
 
+                    <!-- Installment info badges -->
+                    <div class="wcip-installment-info-bar">
+                        <div class="wcip-info-badge">
+                            <span class="wcip-info-badge-label"><?php esc_html_e('حداکثر تعداد اقساط', 'wc-installment'); ?></span>
+                            <span class="wcip-info-badge-value" id="wcip-max-months"><?php echo $installment_enabled && $max_months > 0 ? esc_html(number_to_persian($max_months) . ' ' . __('ماه', 'wc-installment')) : '—'; ?></span>
+                        </div>
+                        <div class="wcip-info-badge">
+                            <span class="wcip-info-badge-label"><?php esc_html_e('نوع کارمزد', 'wc-installment'); ?></span>
+                            <span class="wcip-info-badge-value" id="wcip-fee-type"><?php echo $installment_enabled ? esc_html(isset($settings['fee_type']) && $settings['fee_type'] === 'percentage' ? __('درصدی', 'wc-installment') : __('مبلغ ثابت', 'wc-installment')) : '—'; ?></span>
+                        </div>
+                        <div class="wcip-info-badge">
+                            <span class="wcip-info-badge-label"><?php esc_html_e('مقدار کارمزد', 'wc-installment'); ?></span>
+                            <span class="wcip-info-badge-value" id="wcip-fee-value"><?php echo $installment_enabled ? esc_html(isset($settings['fee_type']) && $settings['fee_type'] === 'percentage' ? number_to_persian(floatval(isset($settings['fee_value']) ? $settings['fee_value'] : 0)) . '٪' : wcip_format_toman(isset($settings['fee_value']) ? $settings['fee_value'] : 0)) : '—'; ?></span>
+                        </div>
+                    </div>
+
                     <!-- Dynamic installment breakdown -->
                     <div class="wcip-installment-breakdown">
                         <div class="wcip-breakdown-row">
                             <span class="wcip-breakdown-label"><?php esc_html_e('مبلغ پیش‌پرداخت', 'wc-installment'); ?></span>
                             <span class="wcip-breakdown-value" id="wcip-down-payment">—</span>
+                        </div>
+                        <div class="wcip-breakdown-row wcip-down-payment-notice" id="wcip-down-payment-notice" style="display:none;">
+                            <span class="wcip-notice-text" id="wcip-down-payment-notice-text"></span>
+                        </div>
+                        <div class="wcip-breakdown-row">
+                            <span class="wcip-breakdown-label"><?php esc_html_e('مبلغ باقی‌مانده', 'wc-installment'); ?></span>
+                            <span class="wcip-breakdown-value" id="wcip-remaining-amount">—</span>
+                        </div>
+                        <div class="wcip-breakdown-row">
+                            <span class="wcip-breakdown-label"><?php esc_html_e('مبلغ کارمزد/سود', 'wc-installment'); ?></span>
+                            <span class="wcip-breakdown-value" id="wcip-fee-amount">—</span>
                         </div>
                         <div class="wcip-breakdown-row">
                             <span class="wcip-breakdown-label"><?php esc_html_e('مبلغ هر قسط', 'wc-installment'); ?></span>

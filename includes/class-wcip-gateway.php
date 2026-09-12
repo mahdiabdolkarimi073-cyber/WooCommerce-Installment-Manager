@@ -82,6 +82,9 @@ if (!class_exists('WC_Gateway_WCIP_Installment')) {
 
         /**
          * Removes this gateway from the checkout unless the cart has installment items.
+         * When the cart has installment items, all real payment gateways remain
+         * available so the customer can pay the down payment through any gateway.
+         * The custom installment gateway is removed in favor of real gateways.
          *
          * @param array $gateways Available payment gateways.
          * @return array
@@ -93,25 +96,28 @@ if (!class_exists('WC_Gateway_WCIP_Installment')) {
             }
 
             $has_installment = false;
+            $total_down = 0;
+
             foreach (WC()->cart->get_cart() as $cart_item) {
                 if (!empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment') {
                     $has_installment = true;
-                    break;
+                    $down = isset($cart_item['wcip_down_payment']) ? floatval($cart_item['wcip_down_payment']) : 0;
+                    $qty = $cart_item['quantity'] ? $cart_item['quantity'] : 1;
+                    $total_down += $down * $qty;
                 }
             }
 
-            if (!$has_installment && isset($gateways[self::GATEWAY_ID])) {
+            // Always remove the custom installment gateway — real gateways handle the down payment.
+            if (isset($gateways[self::GATEWAY_ID])) {
                 unset($gateways[self::GATEWAY_ID]);
             }
 
-            // If the cart has installment items, force the installment gateway
-            // and remove other gateways so the customer must use it.
-            if ($has_installment) {
-                $installment_gateway = isset($gateways[self::GATEWAY_ID]) ? $gateways[self::GATEWAY_ID] : null;
+            // If the cart has installment items with zero down payment,
+            // we need a "free order" flow. WooCommerce handles 0-total orders
+            // automatically if no gateways are available.
+            if ($has_installment && $total_down <= 0) {
+                // Remove all gateways — WooCommerce will process the free order.
                 $gateways = array();
-                if ($installment_gateway) {
-                    $gateways[self::GATEWAY_ID] = $installment_gateway;
-                }
             }
 
             return $gateways;

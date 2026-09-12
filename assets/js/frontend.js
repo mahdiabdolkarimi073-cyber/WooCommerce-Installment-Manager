@@ -98,9 +98,29 @@
         }
 
         $wrapper.find('#wcip-down-payment').text(formatToman(calc.downPayment));
+        $wrapper.find('#wcip-remaining-amount').text(formatToman(calc.remaining));
+        $wrapper.find('#wcip-fee-amount').text(formatToman(calc.interestAmount));
         $wrapper.find('#wcip-monthly-installment').text(formatToman(calc.monthlyInstallment));
         $wrapper.find('#wcip-installment-count').text(toPersian(plan.months) + ' ماه');
         $wrapper.find('#wcip-total-payable').text(formatToman(calc.totalPayable));
+
+        // Down payment notice
+        var $notice = $wrapper.find('#wcip-down-payment-notice');
+        var $noticeText = $wrapper.find('#wcip-down-payment-notice-text');
+        if (calc.downPayment > 0) {
+            $notice.show();
+            $noticeText.text(
+                'پیش‌پرداخت ' + formatToman(calc.downPayment) +
+                ' در زمان خرید از درگاه پرداخت دریافت می‌شود.'
+            );
+            $notice.removeClass('wcip-notice-no-down').addClass('wcip-notice-has-down');
+        } else {
+            $notice.show();
+            $noticeText.text(
+                'این محصول بدون پیش‌پرداخت است. کل مبلغ به‌صورت اقساطی پرداخت می‌شود.'
+            );
+            $notice.removeClass('wcip-notice-has-down').addClass('wcip-notice-no-down');
+        }
     }
 
     /* --- Add to cart: intercept and append hidden fields via AJAX data --- */
