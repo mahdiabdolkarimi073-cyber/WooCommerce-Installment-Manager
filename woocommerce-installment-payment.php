@@ -138,6 +138,15 @@ function wcip_init_plugin()
     // In-app reminder system
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-reminders.php';
 
+    // Reports list table (WP_List_Table)
+    require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-reports-list-table.php';
+
+    // Admin reports dashboard (8 report types + period comparison)
+    require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-reports.php';
+
+    // Early settlement (customer request + admin approval with discount)
+    require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-settlement.php';
+
     // Run database upgrade/migration check.
     WCIP_DB::instance()->maybe_upgrade();
 
@@ -153,6 +162,8 @@ function wcip_init_plugin()
     WCIP_Payment::instance();
     WCIP_Admin_Installments::instance();
     WCIP_Reminders::instance();
+    WCIP_Reports::instance();
+    WCIP_Settlement::instance();
 }
 add_action('plugins_loaded', 'wcip_init_plugin');
 
@@ -169,7 +180,8 @@ function wcip_activate_plugin()
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-sms.php';
 
     WCIP_DB::instance()->create_table();
-    WCIP_SMS::schedule_cron();
+    SMS_Logger::instance()->create_table();
+    SMS_Scheduler::schedule_cron();
 
     // Flush rewrite rules for the My Account endpoint.
     flush_rewrite_rules();
@@ -184,7 +196,7 @@ function wcip_deactivate_plugin()
     if (!class_exists('WCIP_SMS')) {
         require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-sms.php';
     }
-    WCIP_SMS::unschedule_cron();
+    SMS_Scheduler::unschedule_cron();
 }
 register_deactivation_hook(__FILE__, 'wcip_deactivate_plugin');
 

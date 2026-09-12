@@ -72,6 +72,58 @@
         // Initialize indices on load.
         updatePlanIndices();
 
+        // ===== SMS Test Button =====
+
+        $('#wcip-sms-test-btn').on('click', function (e) {
+            e.preventDefault();
+
+            var $btn = $(this);
+            var phone = $('#wcip_sms_test_phone').val();
+            var $msg = $('#wcip-sms-test-result');
+
+            if (!phone) {
+                $msg.removeClass('wcip-sms-test-success wcip-sms-test-error')
+                    .addClass('wcip-sms-test-error')
+                    .text('شماره تلفن را وارد کنید.')
+                    .show();
+                return;
+            }
+
+            $btn.prop('disabled', true).text('در حال ارسال...');
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'wcip_send_test_sms',
+                    nonce: (typeof wcipAdmin !== 'undefined') ? wcipAdmin.nonce : '',
+                    phone: phone
+                },
+                success: function (response) {
+                    if (response.success) {
+                        $msg.removeClass('wcip-sms-test-error')
+                            .addClass('wcip-sms-test-success')
+                            .text(response.data.message)
+                            .show();
+                    } else {
+                        $msg.removeClass('wcip-sms-test-success')
+                            .addClass('wcip-sms-test-error')
+                            .text(response.data.message || 'خطا در ارسال پیامک.')
+                            .show();
+                    }
+                },
+                error: function () {
+                    $msg.removeClass('wcip-sms-test-success')
+                        .addClass('wcip-sms-test-error')
+                        .text('خطای ارتباط با سرور.')
+                        .show();
+                },
+                complete: function () {
+                    $btn.prop('disabled', false).text('ارسال پیامک آزمایشی');
+                }
+            });
+        });
+
         // ===== Installments management: delete confirmation =====
 
         // Single delete confirmation prompt.

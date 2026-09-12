@@ -142,6 +142,7 @@
         hookAddToCart();
         initAccountInstallments();
         initNotificationCenter();
+        initSettlementPage();
     });
 
     /* ===== My Account — Installments page ===== */
@@ -483,6 +484,66 @@
     function getToday() {
         var d = new Date();
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    /* ===== Early Settlement — Customer Request ===== */
+
+    function initSettlementPage() {
+        if (typeof wcipSettlement === 'undefined') {
+            return;
+        }
+
+        $(document).on('click', '.wcip-settlement-btn', function (e) {
+            e.preventDefault();
+
+            var $btn = $(this);
+            var orderId = $btn.data('order-id');
+            var $card = $btn.closest('.wcip-settlement-card');
+            var $msg = $card.find('.wcip-card-status-msg');
+
+            if (!confirm(wcipSettlement.i18n.confirm)) {
+                return;
+            }
+
+            $btn.prop('disabled', true).html(wcipSettlement.i18n.requesting + ' <span class="wcip-card-loading"></span>');
+
+            $.ajax({
+                url: wcipSettlement.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'wcip_submit_settlement',
+                    nonce: wcipSettlement.nonce,
+                    order_id: orderId
+                },
+                success: function (response) {
+                    if (response.success) {
+                        $msg.removeClass('wcip-msg-fail wcip-msg-pending')
+                            .addClass('wcip-msg-success')
+                            .text(wcipSettlement.i18n.success)
+                            .slideDown(200);
+
+                        $btn.hide();
+                        $card.find('.wcip-card-header').append(
+                            '<span class="wcip-status-badge wcip-settlement-badge-pending">' +
+                            wcipSettlement.i18n.pending + '</span>'
+                        );
+                    } else {
+                        $btn.prop('disabled', false).text(wcipSettlement.i18n.error);
+                        $msg.removeClass('wcip-msg-success wcip-msg-pending')
+                            .addClass('wcip-msg-fail')
+                            .text(response.data.message || wcipSettlement.i18n.error)
+                            .slideDown(200);
+                    }
+                },
+                error: function () {
+                    $btn.prop('disabled', false).text(wcipSettlement.i18n.error);
+                    $msg.removeClass('wcip-msg-success wcip-msg-pending')
+                        .addClass('wcip-msg-fail')
+                        .text(wcipSettlement.i18n.error)
+                        .slideDown(200);
+                }
+            });
+        });
     }
 
 })(jQuery);

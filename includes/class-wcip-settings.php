@@ -150,67 +150,16 @@ if (!class_exists('WCIP_Settings')) {
 
                 // ===== SMS Panel Settings =====
                 array(
-                    'title' => __('تنظیمات پنل پیامک', 'wc-installment'),
-                    'type'  => 'title',
-                    'desc'  => __('این افزونه از اتصال به پنل پیامک موجود سایت شما پشتیبانی می‌کند. در صورت استفاده از پلاگین پیامک، آن را از لیست زیر انتخاب کنید.', 'wc-installment'),
-                    'id'    => 'wcip_section_sms',
-                ),
-
-                array(
-                    'title'   => __('فعال‌سازی اطلاع‌رسانی پیامک', 'wc-installment'),
-                    'desc'    => __('فعال/غیرفعال کردن ارسال پیامک برای رویدادهای اقساط', 'wc-installment'),
-                    'id'      => 'wcip_sms_enabled',
-                    'default' => 'no',
-                    'type'    => 'checkbox',
-                    'checkboxgroup' => 'start',
-                ),
-
-                array(
-                    'title'   => __('پنل پیامک متصل', 'wc-installment'),
-                    'id'      => 'wcip_sms_panel_type',
-                    'default' => 'none',
-                    'type'    => 'select',
-                    'options' => $this->get_sms_panel_options(),
-                    'desc'    => __('پنل پیامک مورد استفاده را انتخاب کنید.', 'wc-installment'),
-                ),
-
-                array(
-                    'title'       => __('آدرس API پنل پیامک', 'wc-installment'),
-                    'id'          => 'wcip_sms_api_url',
-                    'default'     => '',
-                    'type'        => 'text',
-                    'desc'        => __('آدرس وب‌سرویس پنل پیامک را وارد کنید.', 'wc-installment'),
-                ),
-
-                array(
-                    'title'       => __('کلید / توکن API', 'wc-installment'),
-                    'id'          => 'wcip_sms_api_key',
-                    'default'     => '',
-                    'type'        => 'text',
-                    'desc'        => __('کلید یا توکن دریافتی از پنل پیامک', 'wc-installment'),
-                ),
-
-                array(
-                    'title'       => __('شماره ارسال‌کننده', 'wc-installment'),
-                    'id'          => 'wcip_sms_sender_number',
-                    'default'     => '',
-                    'type'        => 'text',
-                    'desc'        => __('شماره فرستنده پیامک (خط اختصاصی)', 'wc-installment'),
-                ),
-
-                array(
-                    'title'       => __('تعداد روز قبل از سررسید برای اطلاع‌رسانی', 'wc-installment'),
-                    'id'          => 'wcip_sms_due_soon_days',
-                    'default'     => '3',
-                    'type'        => 'text',
-                    'desc'        => __('چند روز قبل از سررسید قسط، پیامک یادآوری ارسال شود (مثلاً ۱ تا ۳ روز).', 'wc-installment'),
-                ),
-
-                array(
                     'type' => 'sectionend',
                     'id'   => 'wcip_section_sms',
                 ),
             );
+
+            // Merge in the SMS settings from the SMS module.
+            if (class_exists('SMS_Settings')) {
+                $sms_fields = SMS_Settings::instance()->get_settings_fields();
+                $settings = array_merge($settings, $sms_fields);
+            }
 
             return $settings;
         }
@@ -230,6 +179,11 @@ if (!class_exists('WCIP_Settings')) {
         public function save_settings()
         {
             woocommerce_update_options($this->get_settings_fields());
+
+            // Save SMS settings via the SMS module.
+            if (class_exists('SMS_Settings')) {
+                SMS_Settings::instance()->save_settings();
+            }
         }
 
         /**
@@ -253,15 +207,16 @@ if (!class_exists('WCIP_Settings')) {
          */
         public function get_sms_panel_options()
         {
-            if (class_exists('WCIP_SMS')) {
-                return WCIP_SMS::instance()->get_panel_options();
+            if (class_exists('SMS_Manager')) {
+                return SMS_Manager::instance()->get_available_providers();
             }
 
             return array(
                 'none'        => __('— انتخاب نکرده —', 'wc-installment'),
-                'sms_pro'     => __('SMS Pro', 'wc-installment'),
-                'melipayamak' => __('ملی‌پیامک', 'wc-installment'),
                 'kavenegar'   => __('کاوه‌نگار', 'wc-installment'),
+                'smsir'       => __('SMS.ir', 'wc-installment'),
+                'melipayamak' => __('ملی‌پیامک', 'wc-installment'),
+                'farazsms'    => __('فراز SMS', 'wc-installment'),
             );
         }
     }

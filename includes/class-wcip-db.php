@@ -24,6 +24,11 @@ if (!class_exists('WCIP_DB')) {
         const TABLE_NAME = 'wcip_installments';
 
         /**
+         * @var string Settlement requests table name (without prefix).
+         */
+        const SETTLEMENT_TABLE = 'wcip_settlement_requests';
+
+        /**
          * Singleton instance.
          *
          * @return WCIP_DB
@@ -52,6 +57,17 @@ if (!class_exists('WCIP_DB')) {
         {
             global $wpdb;
             return $wpdb->prefix . self::TABLE_NAME;
+        }
+
+        /**
+         * Returns the full settlement requests table name with prefix.
+         *
+         * @return string
+         */
+        public static function settlement_table_name()
+        {
+            global $wpdb;
+            return $wpdb->prefix . self::SETTLEMENT_TABLE;
         }
 
         /**
@@ -93,7 +109,47 @@ if (!class_exists('WCIP_DB')) {
             require_once ABSPATH . 'wp-admin/includes/upgrade.php';
             dbDelta($sql);
 
+            $this->create_settlement_table();
+
+            // Create SMS log table.
+            if (class_exists('SMS_Logger')) {
+                SMS_Logger::instance()->create_table();
+            }
+
             update_option('wcip_db_version', WCIP_VERSION);
+        }
+
+        /**
+         * Creates the settlement requests table for early settlement feature.
+         */
+        public function create_settlement_table()
+        {
+            global $wpdb;
+
+            $table = self::settlement_table_name();
+            $charset_collate = $wpdb->get_charset_collate();
+
+            $sql = "CREATE TABLE {$table} (
+                id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+                order_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                user_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                product_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                remaining_amount DECIMAL(20,2) NOT NULL DEFAULT 0.00,
+                discount_amount DECIMAL(20,2) NOT NULL DEFAULT 0.00,
+                final_amount DECIMAL(20,2) NOT NULL DEFAULT 0.00,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                admin_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+                admin_note TEXT NULL DEFAULT NULL,
+                requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                reviewed_at DATETIME NULL DEFAULT NULL,
+                PRIMARY KEY (id),
+                KEY order_id (order_id),
+                KEY user_id (user_id),
+                KEY status (status)
+            ) {$charset_collate};";
+
+            require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+            dbDelta($sql);
         }
 
         /**
@@ -119,6 +175,15 @@ if (!class_exists('WCIP_DB')) {
             if (!$table_exists) {
                 $this->create_table();
                 return;
+            }
+
+            // Ensure the settlement table exists.
+            $settlement_table = self::settlement_table_name();
+            $settlement_exists = $wpdb->get_var(
+                $wpdb->prepare("SHOW TABLES LIKE %s", $settlement_table)
+            );
+            if (!$settlement_exists) {
+                $this->create_settlement_table();
             }
 
             // Get existing columns.
@@ -830,6 +895,839 @@ if (!class_exists('WCIP_DB')) {
             }
 
             return (int) $wpdb->get_var($sql);
+        }
+
+        // ===== Feature 7: Reports & Settlement =====
+
+        /**
+         * Retrieves report data with filtering, sorting, and pagination.
+         *
+         * @param array $args Query arguments (report_type, date_from, date_to,
+         *                    customer_id, status_filter, product_id, orderby, order,
+         *                    per_page, page).
+         * @return array Results array.
+         */
+        public function get_report_data($args = array())
+        {
+            global $wpdb;
+            $table = self::table_name();
+
+            $defaults = array(
+                'report_type'  => 'total_sales',
+                'date_from'    => '',
+                'date_to'      => '',
+                'customer_id'  => 0,
+                'status_filter'=> '',
+                'product_id'   => 0,
+                'orderby'      => 'id',
+                'order'        => 'DESC',
+                'per_page'     => 20,
+                'page'         => 1,
+            );
+
+            $args = wp_parse_args($args, $defaults);
+
+            $where = '1=1';
+            $params = array();
+
+            // Date range filter (applies to due_date or paid_date depending on report).
+            if (!empty($args['date_from'])) {
+                $where .= ' AND i.due_date >= %s';
+                $params[] = $args['date_from'];
+            }
+            if (!empty($args['date_to'])) {
+                $where .= ' AND i.due_date <= %s';
+                $params[] = $args['date_to'];
+            }
+
+            // Customer filter.
+            if (!empty($args['customer_id'])) {
+                $where .= ' AND i.user_id = %d';
+                $params[] = absint($args['customer_id']);
+            }
+
+            // Status filter.
+            if (!empty($args['status_filter'])) {
+                if ($args['status_filter'] === 'overdue') {
+                    $where .= " AND i.status IN ('unpaid','overdue') AND i.due_date < %s";
+                    $params[] = current_time('Y-m-d');
+                } else {
+                    $where .= ' AND i.status = %s';
+                    $params[] = $args['status_filter'];
+                }
+            }
+
+            // Product filter.
+            if (!empty($args['product_id'])) {
+                $where .= ' AND i.product_id = %d';
+                $params[] = absint($args['product_id']);
+            }
+
+            // Apply report-specific conditions.
+            switch ($args['report_type']) {
+                case 'down_payments':
+                    // Down payments are stored in order meta, not installments.
+                    return $this->get_down_payments_report($args);
+
+                case 'received_amounts':
+                    $where .= " AND i.status = 'paid'";
+                    break;
+
+                case 'remaining_balances':
+                    $where .= " AND i.status IN ('unpaid','overdue')";
+                    break;
+
+                case 'overdue_installments':
+                    $where .= " AND i.status IN ('unpaid','overdue') AND i.due_date < %s";
+                    $params[] = current_time('Y-m-d');
+                    break;
+
+                case 'active_contracts':
+                    $where .= " AND i.status IN ('unpaid','overdue','paid')
+                     AND i.order_id IN (
+                        SELECT order_id FROM {$table}
+                        WHERE status IN ('unpaid','overdue')
+                     )";
+                    break;
+
+                case 'settled_contracts':
+                    $where .= " AND i.order_id IN (
+                        SELECT order_id FROM {$table}
+                        GROUP BY order_id
+                        HAVING COUNT(*) = SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END)
+                    )";
+                    break;
+            }
+
+            $orderby = in_array($args['orderby'], array('id', 'order_id', 'user_id', 'due_date', 'status', 'amount', 'customer_name'), true)
+                ? $args['orderby'] : 'id';
+            if ($orderby === 'customer_name') {
+                $orderby = 'u.display_name';
+            } elseif ($orderby === 'order_id') {
+                $orderby = 'i.order_id';
+            } else {
+                $orderby = 'i.' . $orderby;
+            }
+            $order = strtoupper($args['order']) === 'ASC' ? 'ASC' : 'DESC';
+
+            $per_page = absint($args['per_page']);
+            $page = max(1, absint($args['page']));
+            $offset = ($page - 1) * $per_page;
+
+            $sql = "SELECT i.*, u.display_name AS customer_name
+                    FROM {$table} i
+                    LEFT JOIN {$wpdb->users} u ON i.user_id = u.ID
+                    WHERE {$where}
+                    ORDER BY {$orderby} {$order}
+                    LIMIT %d OFFSET %d";
+
+            $params[] = $per_page;
+            $params[] = $offset;
+
+            $sql = $wpdb->prepare($sql, $params);
+
+            return $wpdb->get_results($sql);
+        }
+
+        /**
+         * Counts report rows for pagination.
+         *
+         * @param array $args Same arguments as get_report_data.
+         * @return int
+         */
+        public function count_report_data($args = array())
+        {
+            global $wpdb;
+            $table = self::table_name();
+
+            $defaults = array(
+                'report_type'  => 'total_sales',
+                'date_from'    => '',
+                'date_to'      => '',
+                'customer_id'  => 0,
+                'status_filter'=> '',
+                'product_id'   => 0,
+            );
+
+            $args = wp_parse_args($args, $defaults);
+
+            // Down payments use a different query.
+            if ($args['report_type'] === 'down_payments') {
+                return $this->count_down_payments_report($args);
+            }
+
+            $where = '1=1';
+            $params = array();
+
+            if (!empty($args['date_from'])) {
+                $where .= ' AND i.due_date >= %s';
+                $params[] = $args['date_from'];
+            }
+            if (!empty($args['date_to'])) {
+                $where .= ' AND i.due_date <= %s';
+                $params[] = $args['date_to'];
+            }
+            if (!empty($args['customer_id'])) {
+                $where .= ' AND i.user_id = %d';
+                $params[] = absint($args['customer_id']);
+            }
+            if (!empty($args['status_filter'])) {
+                if ($args['status_filter'] === 'overdue') {
+                    $where .= " AND i.status IN ('unpaid','overdue') AND i.due_date < %s";
+                    $params[] = current_time('Y-m-d');
+                } else {
+                    $where .= ' AND i.status = %s';
+                    $params[] = $args['status_filter'];
+                }
+            }
+            if (!empty($args['product_id'])) {
+                $where .= ' AND i.product_id = %d';
+                $params[] = absint($args['product_id']);
+            }
+
+            switch ($args['report_type']) {
+                case 'received_amounts':
+                    $where .= " AND i.status = 'paid'";
+                    break;
+                case 'remaining_balances':
+                    $where .= " AND i.status IN ('unpaid','overdue')";
+                    break;
+                case 'overdue_installments':
+                    $where .= " AND i.status IN ('unpaid','overdue') AND i.due_date < %s";
+                    $params[] = current_time('Y-m-d');
+                    break;
+                case 'active_contracts':
+                    $where .= " AND i.order_id IN (
+                        SELECT order_id FROM {$table}
+                        WHERE status IN ('unpaid','overdue')
+                    )";
+                    break;
+                case 'settled_contracts':
+                    $where .= " AND i.order_id IN (
+                        SELECT order_id FROM {$table}
+                        GROUP BY order_id
+                        HAVING COUNT(*) = SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END)
+                    )";
+                    break;
+            }
+
+            $sql = "SELECT COUNT(*) FROM {$table} i
+                    LEFT JOIN {$wpdb->users} u ON i.user_id = u.ID
+                    WHERE {$where}";
+
+            if (!empty($params)) {
+                $sql = $wpdb->prepare($sql, $params);
+            }
+
+            return (int) $wpdb->get_var($sql);
+        }
+
+        /**
+         * Retrieves the down payments report from order meta.
+         *
+         * @param array $args Query arguments.
+         * @return array
+         */
+        protected function get_down_payments_report($args)
+        {
+            global $wpdb;
+
+            $where = '1=1';
+            $params = array();
+
+            if (!empty($args['date_from'])) {
+                $where .= ' AND p.post_date >= %s';
+                $params[] = $args['date_from'];
+            }
+            if (!empty($args['date_to'])) {
+                $where .= ' AND p.post_date <= %s';
+                $params[] = $args['date_to'];
+            }
+            if (!empty($args['customer_id'])) {
+                $where .= ' AND o.meta_value = %d';
+                $params[] = absint($args['customer_id']);
+            }
+
+            $orderby = in_array($args['orderby'], array('order_id', 'amount', 'date', 'customer_name'), true)
+                ? $args['orderby'] : 'order_id';
+            $order = strtoupper($args['order']) === 'ASC' ? 'ASC' : 'DESC';
+
+            $order_col = ($orderby === 'amount') ? 'down_val' : ($orderby === 'date' ? 'p.post_date' : ($orderby === 'customer_name' ? 'u.display_name' : 'p.ID'));
+
+            $per_page = absint($args['per_page']);
+            $page = max(1, absint($args['page']));
+            $offset = ($page - 1) * $per_page;
+
+            $sql = "SELECT p.ID AS order_id, p.post_date AS order_date,
+                    om_down.meta_value AS down_payment,
+                    u.display_name AS customer_name,
+                    u.ID AS customer_id
+                    FROM {$wpdb->posts} p
+                    INNER JOIN {$wpdb->postmeta} om_enable ON p.ID = om_enable.post_id
+                        AND om_enable.meta_key = '_installment_enabled'
+                        AND om_enable.meta_value = 'true'
+                    LEFT JOIN {$wpdb->postmeta} om_down ON p.ID = om_down.post_id
+                        AND om_down.meta_key = '_installment_down_payment'
+                    LEFT JOIN {$wpdb->postmeta} o ON p.ID = o.post_id
+                        AND o.meta_key = '_customer_user'
+                    LEFT JOIN {$wpdb->users} u ON o.meta_value = u.ID
+                    WHERE {$where}
+                    ORDER BY {$order_col} {$order}
+                    LIMIT %d OFFSET %d";
+
+            $params[] = $per_page;
+            $params[] = $offset;
+
+            $sql = $wpdb->prepare($sql, $params);
+
+            return $wpdb->get_results($sql);
+        }
+
+        /**
+         * Counts down payment report rows.
+         *
+         * @param array $args Query arguments.
+         * @return int
+         */
+        protected function count_down_payments_report($args)
+        {
+            global $wpdb;
+
+            $where = '1=1';
+            $params = array();
+
+            if (!empty($args['date_from'])) {
+                $where .= ' AND p.post_date >= %s';
+                $params[] = $args['date_from'];
+            }
+            if (!empty($args['date_to'])) {
+                $where .= ' AND p.post_date <= %s';
+                $params[] = $args['date_to'];
+            }
+            if (!empty($args['customer_id'])) {
+                $where .= ' AND o.meta_value = %d';
+                $params[] = absint($args['customer_id']);
+            }
+
+            $sql = "SELECT COUNT(*)
+                    FROM {$wpdb->posts} p
+                    INNER JOIN {$wpdb->postmeta} om_enable ON p.ID = om_enable.post_id
+                        AND om_enable.meta_key = '_installment_enabled'
+                        AND om_enable.meta_value = 'true'
+                    LEFT JOIN {$wpdb->postmeta} o ON p.ID = o.post_id
+                        AND o.meta_key = '_customer_user'
+                    WHERE {$where}";
+
+            if (!empty($params)) {
+                $sql = $wpdb->prepare($sql, $params);
+            }
+
+            return (int) $wpdb->get_var($sql);
+        }
+
+        /**
+         * Returns summary totals for a report type (for summary cards).
+         *
+         * @param string $report_type Report type.
+         * @param array  $args       Filter arguments.
+         * @return array Array with 'total', 'count', 'extra' keys.
+         */
+        public function get_report_summary($report_type, $args = array())
+        {
+            global $wpdb;
+            $table = self::table_name();
+
+            $where = '1=1';
+            $params = array();
+
+            if (!empty($args['date_from'])) {
+                $where .= ' AND i.due_date >= %s';
+                $params[] = $args['date_from'];
+            }
+            if (!empty($args['date_to'])) {
+                $where .= ' AND i.due_date <= %s';
+                $params[] = $args['date_to'];
+            }
+            if (!empty($args['customer_id'])) {
+                $where .= ' AND i.user_id = %d';
+                $params[] = absint($args['customer_id']);
+            }
+
+            switch ($report_type) {
+                case 'total_sales':
+                    $sql = "SELECT COALESCE(SUM(i.amount),0) AS total, COUNT(*) AS count
+                            FROM {$table} i WHERE {$where}";
+                    break;
+
+                case 'received_amounts':
+                    $where .= " AND i.status = 'paid'";
+                    $sql = "SELECT COALESCE(SUM(i.amount),0) AS total, COUNT(*) AS count
+                            FROM {$table} i WHERE {$where}";
+                    break;
+
+                case 'remaining_balances':
+                    $where .= " AND i.status IN ('unpaid','overdue')";
+                    $sql = "SELECT COALESCE(SUM(i.amount),0) AS total, COUNT(*) AS count
+                            FROM {$table} i WHERE {$where}";
+                    break;
+
+                case 'overdue_installments':
+                    $where .= " AND i.status IN ('unpaid','overdue') AND i.due_date < %s";
+                    $params[] = current_time('Y-m-d');
+                    $sql = "SELECT COALESCE(SUM(i.amount),0) AS total, COUNT(*) AS count
+                            FROM {$table} i WHERE {$where}";
+                    break;
+
+                case 'active_contracts':
+                    $sql = "SELECT 0 AS total, COUNT(DISTINCT i.order_id) AS count
+                            FROM {$table} i
+                            WHERE i.order_id IN (
+                                SELECT order_id FROM {$table}
+                                WHERE status IN ('unpaid','overdue')
+                            )";
+                    break;
+
+                case 'settled_contracts':
+                    $sql = "SELECT 0 AS total, COUNT(DISTINCT i.order_id) AS count
+                            FROM {$table} i
+                            WHERE i.order_id IN (
+                                SELECT order_id FROM {$table}
+                                GROUP BY order_id
+                                HAVING COUNT(*) = SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END)
+                            )";
+                    break;
+
+                case 'down_payments':
+                    $sql = "SELECT COALESCE(SUM(om_down.meta_value),0) AS total, COUNT(*) AS count
+                            FROM {$wpdb->posts} p
+                            INNER JOIN {$wpdb->postmeta} om_enable ON p.ID = om_enable.post_id
+                                AND om_enable.meta_key = '_installment_enabled'
+                                AND om_enable.meta_value = 'true'
+                            LEFT JOIN {$wpdb->postmeta} om_down ON p.ID = om_down.post_id
+                                AND om_down.meta_key = '_installment_down_payment'
+                            WHERE 1=1";
+                    if (!empty($args['date_from'])) {
+                        $sql = $wpdb->prepare($sql . " AND p.post_date >= %s", $args['date_from']);
+                    }
+                    if (!empty($args['date_to'])) {
+                        $sql = $wpdb->prepare($sql . " AND p.post_date <= %s", $args['date_to']);
+                    }
+                    return $wpdb->get_row($sql) ?: (object) array('total' => 0, 'count' => 0);
+
+                default:
+                    return (object) array('total' => 0, 'count' => 0);
+            }
+
+            if (!empty($params)) {
+                $sql = $wpdb->prepare($sql, $params);
+            }
+
+            return $wpdb->get_row($sql) ?: (object) array('total' => 0, 'count' => 0);
+        }
+
+        /**
+         * Returns period comparison data between two date ranges.
+         *
+         * @param string $report_type  Report type.
+         * @param string $from1        Start date of period 1.
+         * @param string $to1          End date of period 1.
+         * @param string $from2        Start date of period 2.
+         * @param string $to2          End date of period 2.
+         * @return array Comparison data.
+         */
+        public function get_period_comparison($report_type, $from1, $to1, $from2, $to2)
+        {
+            $period1 = $this->get_report_summary($report_type, array(
+                'date_from' => $from1,
+                'date_to'   => $to1,
+            ));
+            $period2 = $this->get_report_summary($report_type, array(
+                'date_from' => $from2,
+                'date_to'   => $to2,
+            ));
+
+            $total1 = floatval($period1->total);
+            $total2 = floatval($period2->total);
+            $count1 = (int) $period1->count;
+            $count2 = (int) $period2->count;
+
+            $diff = $total2 - $total1;
+            $pct_change = 0;
+            if ($total1 > 0) {
+                $pct_change = (($total2 - $total1) / $total1) * 100;
+            }
+
+            return array(
+                'period1' => array('total' => $total1, 'count' => $count1, 'from' => $from1, 'to' => $to1),
+                'period2' => array('total' => $total2, 'count' => $count2, 'from' => $from2, 'to' => $to2),
+                'diff'     => $diff,
+                'pct_change' => $pct_change,
+            );
+        }
+
+        // ===== Settlement Requests =====
+
+        /**
+         * Inserts a new settlement request.
+         *
+         * @param array $data Settlement request data.
+         * @return int|false Inserted ID or false.
+         */
+        public function insert_settlement_request($data)
+        {
+            global $wpdb;
+            $table = self::settlement_table_name();
+
+            $defaults = array(
+                'order_id'        => 0,
+                'user_id'         => 0,
+                'product_id'      => 0,
+                'remaining_amount'=> 0.00,
+                'discount_amount' => 0.00,
+                'final_amount'    => 0.00,
+                'status'          => 'pending',
+                'admin_id'        => 0,
+                'admin_note'      => null,
+            );
+
+            $data = wp_parse_args($data, $defaults);
+
+            $result = $wpdb->insert(
+                $table,
+                $data,
+                array('%d', '%d', '%d', '%f', '%f', '%f', '%s', '%d', '%s')
+            );
+
+            if ($result === false) {
+                return false;
+            }
+
+            return (int) $wpdb->insert_id;
+        }
+
+        /**
+         * Updates a settlement request.
+         *
+         * @param int   $id   Settlement request ID.
+         * @param array $data Update data.
+         * @return bool
+         */
+        public function update_settlement_request($id, $data)
+        {
+            global $wpdb;
+            $table = self::settlement_table_name();
+
+            $id = absint($id);
+            if ($id <= 0) {
+                return false;
+            }
+
+            $format = array();
+            foreach ($data as $key => $value) {
+                switch ($key) {
+                    case 'order_id':
+                    case 'user_id':
+                    case 'product_id':
+                    case 'admin_id':
+                        $format[] = '%d';
+                        break;
+                    case 'remaining_amount':
+                    case 'discount_amount':
+                    case 'final_amount':
+                        $format[] = '%f';
+                        break;
+                    case 'status':
+                    case 'admin_note':
+                    case 'reviewed_at':
+                        $format[] = '%s';
+                        break;
+                    default:
+                        unset($data[$key]);
+                        break;
+                }
+            }
+
+            if (empty($data)) {
+                return false;
+            }
+
+            $result = $wpdb->update($table, $data, array('id' => $id), $format, array('%d'));
+
+            return $result !== false;
+        }
+
+        /**
+         * Retrieves a single settlement request by ID.
+         *
+         * @param int $id Settlement request ID.
+         * @return object|null
+         */
+        public function get_settlement_request($id)
+        {
+            global $wpdb;
+            $table = self::settlement_table_name();
+
+            $id = absint($id);
+            if ($id <= 0) {
+                return null;
+            }
+
+            return $wpdb->get_row(
+                $wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id)
+            );
+        }
+
+        /**
+         * Retrieves all settlement requests with optional filtering.
+         *
+         * @param array $args Query arguments.
+         * @return array
+         */
+        public function get_settlement_requests($args = array())
+        {
+            global $wpdb;
+            $table = self::settlement_table_name();
+
+            $defaults = array(
+                'status'   => '',
+                'user_id'  => 0,
+                'orderby'  => 'id',
+                'order'    => 'DESC',
+                'per_page' => 20,
+                'page'     => 1,
+            );
+
+            $args = wp_parse_args($args, $defaults);
+
+            $where = '1=1';
+            $params = array();
+
+            if (!empty($args['status'])) {
+                $where .= ' AND s.status = %s';
+                $params[] = $args['status'];
+            }
+            if (!empty($args['user_id'])) {
+                $where .= ' AND s.user_id = %d';
+                $params[] = absint($args['user_id']);
+            }
+
+            $orderby = in_array($args['orderby'], array('id', 'order_id', 'remaining_amount', 'final_amount', 'status', 'requested_at'), true)
+                ? $args['orderby'] : 'id';
+            $order = strtoupper($args['order']) === 'ASC' ? 'ASC' : 'DESC';
+
+            $per_page = absint($args['per_page']);
+            $page = max(1, absint($args['page']));
+            $offset = ($page - 1) * $per_page;
+
+            $sql = "SELECT s.*, u.display_name AS customer_name
+                    FROM {$table} s
+                    LEFT JOIN {$wpdb->users} u ON s.user_id = u.ID
+                    WHERE {$where}
+                    ORDER BY s.{$orderby} {$order}
+                    LIMIT %d OFFSET %d";
+
+            $params[] = $per_page;
+            $params[] = $offset;
+
+            $sql = $wpdb->prepare($sql, $params);
+
+            return $wpdb->get_results($sql);
+        }
+
+        /**
+         * Counts settlement requests matching the filter.
+         *
+         * @param array $args Query arguments.
+         * @return int
+         */
+        public function count_settlement_requests($args = array())
+        {
+            global $wpdb;
+            $table = self::settlement_table_name();
+
+            $defaults = array(
+                'status'  => '',
+                'user_id' => 0,
+            );
+
+            $args = wp_parse_args($args, $defaults);
+
+            $where = '1=1';
+            $params = array();
+
+            if (!empty($args['status'])) {
+                $where .= ' AND s.status = %s';
+                $params[] = $args['status'];
+            }
+            if (!empty($args['user_id'])) {
+                $where .= ' AND s.user_id = %d';
+                $params[] = absint($args['user_id']);
+            }
+
+            $sql = "SELECT COUNT(*) FROM {$table} s WHERE {$where}";
+
+            if (!empty($params)) {
+                $sql = $wpdb->prepare($sql, $params);
+            }
+
+            return (int) $wpdb->get_var($sql);
+        }
+
+        /**
+         * Calculates the remaining balance for an order (sum of unpaid installments).
+         *
+         * @param int $order_id Order ID.
+         * @return float
+         */
+        public function get_order_remaining_balance($order_id)
+        {
+            global $wpdb;
+            $table = self::table_name();
+
+            $order_id = absint($order_id);
+            if ($order_id <= 0) {
+                return 0.0;
+            }
+
+            return (float) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COALESCE(SUM(amount),0) FROM {$table}
+                     WHERE order_id = %d AND status IN ('unpaid','overdue')",
+                    $order_id
+                )
+            );
+        }
+
+        /**
+         * Checks if an order has any pending settlement request.
+         *
+         * @param int $order_id Order ID.
+         * @return bool
+         */
+        public function has_pending_settlement_request($order_id)
+        {
+            global $wpdb;
+            $table = self::settlement_table_name();
+
+            $order_id = absint($order_id);
+            if ($order_id <= 0) {
+                return false;
+            }
+
+            $count = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$table} WHERE order_id = %d AND status = 'pending'",
+                    $order_id
+                )
+            );
+
+            return $count > 0;
+        }
+
+        /**
+         * Marks an order's remaining installments as cancelled (settled).
+         *
+         * @param int $order_id Order ID.
+         * @return int Number of updated rows.
+         */
+        public function settle_order_installments($order_id)
+        {
+            global $wpdb;
+            $table = self::table_name();
+
+            $order_id = absint($order_id);
+            if ($order_id <= 0) {
+                return 0;
+            }
+
+            $result = $wpdb->query(
+                $wpdb->prepare(
+                    "UPDATE {$table} SET status = 'paid', paid_date = %s
+                     WHERE order_id = %d AND status IN ('unpaid','overdue')",
+                    current_time('mysql'),
+                    $order_id
+                )
+            );
+
+            return (int) $result;
+        }
+
+        /**
+         * Retrieves all unique orders that have installment records (for customer contracts).
+         *
+         * @param int $user_id User ID. 0 for all users.
+         * @return array
+         */
+        public function get_user_contracts($user_id)
+        {
+            global $wpdb;
+            $table = self::table_name();
+
+            $user_id = absint($user_id);
+            if ($user_id <= 0) {
+                return array();
+            }
+
+            return $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT order_id, user_id, product_id, MIN(installment_number) as first_installment,
+                            MAX(total_installments) as total_installments,
+                            SUM(amount) as total_amount,
+                            SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) as paid_amount,
+                            SUM(CASE WHEN status IN ('unpaid','overdue') THEN amount ELSE 0 END) as remaining_amount,
+                            MIN(due_date) as first_due_date,
+                            MAX(due_date) as last_due_date
+                     FROM {$table} WHERE user_id = %d
+                     GROUP BY order_id
+                     ORDER BY order_id DESC",
+                    $user_id
+                )
+            );
+        }
+
+        /**
+         * Retrieves installments that need SMS notification for a given event type.
+         *
+         * @param string $event_type  'pre_due', 'due_date', or 'overdue'.
+         * @param string $date_from   Start date (Y-m-d). Empty for no lower bound.
+         * @param string $date_to     End date (Y-m-d). Empty for no upper bound.
+         * @return array
+         */
+        public function get_installments_for_sms($event_type, $date_from, $date_to)
+        {
+            global $wpdb;
+            $table = self::table_name();
+
+            $where = "i.status IN ('unpaid', 'overdue')";
+            $params = array();
+
+            switch ($event_type) {
+                case 'pre_due':
+                    if (!empty($date_from) && !empty($date_to)) {
+                        $where .= ' AND i.due_date >= %s AND i.due_date <= %s';
+                        $params[] = $date_from;
+                        $params[] = $date_to;
+                    }
+                    break;
+
+                case 'due_date':
+                    $where .= ' AND i.due_date = %s';
+                    $params[] = $date_to;
+                    break;
+
+                case 'overdue':
+                    $where .= ' AND i.due_date < %s';
+                    $params[] = $date_to;
+                    break;
+            }
+
+            $sql = "SELECT i.* FROM {$table} i WHERE {$where} ORDER BY i.due_date ASC";
+
+            if (!empty($params)) {
+                $sql = $wpdb->prepare($sql, $params);
+            }
+
+            return $wpdb->get_results($sql);
         }
     }
 }

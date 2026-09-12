@@ -1085,3 +1085,121 @@
         padding: 24px 20px;
     }
 }
+
+/* ===== My Account — Early Settlement Page ===== */
+
+.wcip-account-settlement {
+    direction: rtl;
+    max-width: 900px;
+}
+
+.wcip-account-settlement h2 {
+    margin-bottom: 20px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #333;
+}
+
+.wcip-settlement-contracts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.wcip-settlement-card {
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 18px;
+    transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+}
+
+.wcip-settlement-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+.wcip-settlement-card-settled {
+    border-color: #c3e6cb;
+    opacity: 0.85;
+}
+
+.wcip-settlement-card .wcip-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.wcip-settlement-card .wcip-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #333;
+}
+
+.wcip-settlement-card .wcip-card-body {
+    margin-bottom: 14px;
+}
+
+.wcip-settlement-card .wcip-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+}
+
+.wcip-settlement-card .wcip-card-label {
+    font-size: 13px;
+    color: #777;
+    font-weight: 500;
+}
+
+.wcip-settlement-card .wcip-card-value {
+    font-size: 13px;
+    color: #222;
+    font-weight: 600;
+}
+
+.wcip-remaining-amount {
+    color: #c8800c !important;
+    font-weight: 700 !important;
+}
+
+.wcip-settlement-btn {
+    background: #2a8a2a !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 8px 18px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+    width: 100%;
+    text-align: center;
+}
+
+.wcip-settlement-btn:hover {
+    background: #226a22 !important;
+    transform: scale(1.02);
+}
+
+.wcip-settlement-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.wcip-settlement-badge-pending {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+@media screen and (max-width: 768px) {
+    .wcip-settlement-contracts {
+        grid-template-columns: 1fr;
+    }
+}
