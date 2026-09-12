@@ -124,8 +124,10 @@
     }
 
     /* --- Add to cart: intercept and append hidden fields via AJAX data --- */
+    var wcipInstallmentCalc = null;
+
     function hookAddToCart() {
-        $(document).on('submit', 'form.cart', function () {
+        $(document).on('submit', 'form.cart', function (e) {
             var $form = $(this);
             var $wrapper = $form.find('.wcip-payment-selector-wrapper');
 
@@ -134,15 +136,131 @@
             }
 
             var method = $wrapper.find('input[name="wcip_payment_method"]:checked').val();
-            var planIdx = $wrapper.find('input[name="wcip_installment_plan"]:checked').val();
 
-            // Remove any previously injected hidden fields.
-            $form.find('.wcip-cart-hidden-fields').remove();
+            if (method !== 'installment') {
+                // Cash mode — let WooCommerce handle normally.
+                $form.find('.wcip-cart-hidden-fields').remove();
+                var $hidden = $('<div class="wcip-cart-hidden-fields" style="display:none;"></div>');
+                $hidden.append('<input type="hidden" name="wcip_selected_method" value="cash" />');
+                $hidden.append('<input type="hidden" name="wcip_selected_plan" value="" />');
+                $form.append($hidden);
+                return;
+            }
 
-            var $hidden = $('<div class="wcip-cart-hidden-fields" style="display:none;"></div>');
-            $hidden.append('<input type="hidden" name="wcip_selected_method" value="' + (method || 'cash') + '" />');
-            $hidden.append('<input type="hidden" name="wcip_selected_plan" value="' + (planIdx !== undefined ? planIdx : '') + '" />');
-            $form.append($hidden);
+            // Installment mode — stop the form, show confirmation modal.
+            e.preventDefault();
+            e.stopPropagation();
+
+            var data = window.wcipData;
+            if (!data || !data.enabled) {
+                return;
+            }
+
+            var planIdx = parseInt($wrapper.find('input[name="wcip_installment_plan"]:checked').val(), 10);
+            if (isNaN(planIdx) || !data.plans[planIdx]) {
+                $wrapper.find('#wcip-plan-error').show();
+                return;
+            }
+
+            var plan = data.plans[planIdx];
+            var calc = calculatePlan(
+                data.productPrice,
+                data.downPaymentType,
+                data.downPaymentValue,
+                plan.months,
+                plan.interestRate
+            );
+
+            if (!calc) {
+                return;
+            }
+
+            wcipInstallmentCalc = {
+                planIdx: planIdx,
+                calc: calc,
+                months: plan.months
+            };
+
+            // Populate the confirmation modal.
+            $('#wcip-confirm-down').text(formatToman(calc.downPayment));
+            $('#wcip-confirm-remaining').text(formatToman(calc.remaining));
+            $('#wcip-confirm-fee').text(formatToman(calc.interestAmount));
+            $('#wcip-confirm-monthly').text(formatToman(calc.monthlyInstallment));
+            $('#wcip-confirm-months').text(toPersian(plan.months) + ' ماه');
+            $('#wcip-confirm-total').text(formatToman(calc.totalPayable));
+
+            var $notice = $('#wcip-confirm-notice');
+            if (calc.downPayment > 0) {
+                $notice
+                    .removeClass('wcip-notice-no-down')
+                    .addClass('wcip-notice-has-down')
+                    .text('پیش‌پرداخت ' + formatToman(calc.downPayment) + ' در زمان خرید از درگاه پرداخت دریافت می‌شود.');
+            } else {
+                $notice
+                    .removeClass('wcip-notice-has-down')
+                    .addClass('wcip-notice-no-down')
+                    .text('این محصول بدون پیش‌پرداخت است. کل مبلغ به‌صورت اقساطی پرداخت می‌شود.');
+            }
+
+            $('#wcip-confirm-modal').css('display', 'flex');
+        });
+
+        // Confirm button — add to cart via AJAX then redirect to checkout.
+        $(document).on('click', '#wcip-confirm-proceed', function () {
+            if (!wcipInstallmentCalc) {
+                return;
+            }
+
+            var $btn = $(this);
+            $btn.prop('disabled', true).text('در حال افزودن...');
+
+            var data = window.wcipData;
+            var $form = $('form.cart');
+            var productId = data.productId;
+            var qty = 1;
+            var $qtyInput = $form.find('input[name="quantity"]');
+            if ($qtyInput.length) {
+                qty = parseInt($qtyInput.val(), 10) || 1;
+            }
+
+            var variationId = 0;
+            var $varSelect = $form.find('input[name="variation_id"]');
+            if ($varSelect.length) {
+                variationId = parseInt($varSelect.val(), 10) || 0;
+            }
+
+            $.ajax({
+                url: wcipAjax.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'wcip_add_installment_to_cart',
+                    nonce: wcipAjax.nonce,
+                    product_id: productId,
+                    variation_id: variationId,
+                    quantity: qty,
+                    plan_idx: wcipInstallmentCalc.planIdx
+                },
+                success: function (response) {
+                    if (response.success) {
+                        $('#wcip-confirm-modal').css('display', 'none');
+                        window.location.href = response.data.redirect_url;
+                    } else {
+                        $btn.prop('disabled', false).text('تأیید و ادامه');
+                        var msg = response.data && response.data.message ? response.data.message : 'خطا در افزودن به سبد.';
+                        alert(msg);
+                    }
+                },
+                error: function () {
+                    $btn.prop('disabled', false).text('تأیید و ادامه');
+                    alert('خطا در ارتباط با سرور.');
+                }
+            });
+        });
+
+        // Modal close handlers.
+        $(document).on('click', '#wcip-confirm-cancel, #wcip-confirm-modal .wcip-modal-close, #wcip-confirm-modal .wcip-modal-overlay', function () {
+            $('#wcip-confirm-modal').css('display', 'none');
+            wcipInstallmentCalc = null;
         });
     }
 
