@@ -1,0 +1,1087 @@
+/* ===== Frontend styles for WooCommerce Installment Payment v2.0 ===== */
+
+/* Payment selector wrapper */
+.wcip-payment-selector-wrapper {
+    margin: 20px 0;
+    padding: 20px;
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    direction: rtl;
+    text-align: right;
+}
+
+.wcip-section-title {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #d6d6d6;
+}
+
+/* Payment method radio cards */
+.wcip-payment-methods {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 0;
+    flex-wrap: wrap;
+}
+
+.wcip-payment-method-option {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.25s, background 0.25s, box-shadow 0.25s;
+    text-align: right;
+}
+
+.wcip-payment-method-option:hover {
+    border-color: #2a8a2a;
+    box-shadow: 0 2px 8px rgba(42, 138, 42, 0.1);
+}
+
+.wcip-payment-method-option input[type="radio"] {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.wcip-payment-method-option:has(input:checked) {
+    border-color: #2a8a2a;
+    background: #f0faf0;
+    box-shadow: 0 2px 12px rgba(42, 138, 42, 0.15);
+}
+
+.wcip-payment-method-option:has(input:checked) .wcip-payment-method-label {
+    color: #2a8a2a;
+    font-weight: 700;
+}
+
+.wcip-payment-method-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    font-size: 11px;
+    font-weight: 700;
+    color: #555;
+    flex-shrink: 0;
+}
+
+.wcip-payment-method-option:has(input:checked) .wcip-payment-method-icon {
+    background: #2a8a2a;
+    color: #fff;
+}
+
+.wcip-payment-method-label {
+    flex-grow: 1;
+    font-size: 14px;
+    color: #555;
+    font-weight: 600;
+}
+
+.wcip-payment-method-price {
+    font-size: 14px;
+    color: #222;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Installment details section */
+.wcip-installment-details {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px dashed #d0d0d0;
+    animation: wcipFadeIn 0.3s ease;
+}
+
+@keyframes wcipFadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.wcip-details-title {
+    margin: 0 0 14px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+}
+
+/* Plan selection radio buttons */
+.wcip-plan-radios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.wcip-plan-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.wcip-plan-option:hover {
+    border-color: #2a8a2a;
+}
+
+.wcip-plan-option input[type="radio"] {
+    margin: 0;
+}
+
+.wcip-plan-option:has(input:checked) {
+    border-color: #2a8a2a;
+    background: #f0faf0;
+}
+
+.wcip-plan-option:has(input:checked) span {
+    color: #2a8a2a;
+    font-weight: 700;
+}
+
+.wcip-plan-option span {
+    font-size: 14px;
+    color: #555;
+    font-weight: 600;
+}
+
+.wcip-plan-interest {
+    font-size: 11px !important;
+    color: #c8800c !important;
+    font-weight: 500 !important;
+    padding: 2px 6px;
+    background: #fff8e8;
+    border-radius: 4px;
+}
+
+.wcip-single-plan-info {
+    padding: 10px 14px;
+    background: #f0faf0;
+    border: 1px solid #d0e8d0;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #2a6a2a;
+    margin: 0 0 18px 0;
+}
+
+/* Dynamic breakdown table */
+.wcip-installment-breakdown {
+    padding: 16px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+}
+
+.wcip-breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 6px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.wcip-breakdown-row:last-child {
+    border-bottom: none;
+}
+
+.wcip-breakdown-label {
+    font-size: 14px;
+    color: #555;
+    font-weight: 600;
+}
+
+.wcip-breakdown-value {
+    font-size: 14px;
+    color: #222;
+    font-weight: 700;
+}
+
+.wcip-breakdown-total {
+    margin-top: 6px;
+    padding: 14px 6px;
+    background: #f0f8f0;
+    border-radius: 6px;
+    border-bottom: none;
+}
+
+.wcip-breakdown-total .wcip-breakdown-label,
+.wcip-breakdown-total .wcip-breakdown-value {
+    font-size: 16px;
+    color: #2a6a2a;
+}
+
+/* Validation error */
+.wcip-validation-error {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #fff0f0;
+    border: 1px solid #e8c0c0;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #c03030;
+    text-align: right;
+}
+
+/* Summary table (used on order pages and static views) */
+.wcip-installment-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.wcip-installment-table th,
+.wcip-installment-table td {
+    padding: 10px 12px;
+    text-align: right;
+    border-bottom: 1px solid #e8e8e8;
+    font-size: 14px;
+}
+
+.wcip-installment-table th {
+    font-weight: 600;
+    color: #555;
+    width: 50%;
+}
+
+.wcip-installment-table td {
+    color: #222;
+}
+
+.wcip-installment-table .wcip-total-row {
+    background: #f0f0f0;
+    font-weight: 700;
+}
+
+.wcip-installment-table .wcip-total-row th,
+.wcip-installment-table .wcip-total-row td {
+    border-bottom: none;
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+/* Cart / checkout mini breakdown */
+.wcip-cart-installment-info {
+    display: block;
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: #f5f5f5;
+    border-right: 3px solid #2a8a2a;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #444;
+    direction: rtl;
+    text-align: right;
+}
+
+.wcip-cart-installment-info strong {
+    color: #2a8a2a;
+}
+
+/* Order received / thank-you page summary */
+.wcip-order-installment-summary {
+    margin: 20px 0;
+    padding: 20px;
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    direction: rtl;
+    text-align: right;
+}
+
+.wcip-order-installment-summary h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #d6d6d6;
+}
+
+/* ===== Dynamic Status Indicators ===== */
+
+/* Due Soon — yellow/warning */
+.wcip-installment-card.wcip-status-due-soon {
+    border-color: #f0c040;
+    background: linear-gradient(135deg, #fffef5 0%, #ffffff 100%);
+}
+
+.wcip-status-badge.wcip-status-due-soon {
+    background: #fff8e1;
+    color: #8a6d00;
+    border: 1px solid #ffe082;
+}
+
+.wcip-days-value.wcip-days-due_soon {
+    color: #c8800c;
+    font-weight: 600;
+}
+
+/* Due Today — red/urgent */
+.wcip-installment-card.wcip-status-due-today {
+    border-color: #e04040;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
+    box-shadow: 0 2px 12px rgba(224, 64, 64, 0.15);
+}
+
+.wcip-status-badge.wcip-status-due-today {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5a3a8;
+    font-weight: 700;
+}
+
+.wcip-days-value.wcip-days-due_today {
+    color: #c03030;
+    font-weight: 700;
+}
+
+/* Overdue — dark red/critical */
+.wcip-installment-card.wcip-status-overdue {
+    border-color: #b71c1c;
+    background: linear-gradient(135deg, #fff0f0 0%, #ffffff 100%);
+}
+
+.wcip-status-badge.wcip-status-overdue {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    font-weight: 700;
+}
+
+.wcip-days-value.wcip-days-overdue {
+    color: #a01818;
+    font-weight: 700;
+}
+
+/* Paid — green/success */
+.wcip-installment-card.wcip-status-paid {
+    border-color: #c3e6cb;
+    opacity: 0.85;
+}
+
+.wcip-status-badge.wcip-status-paid {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.wcip-days-value.wcip-days-paid {
+    color: #2a8a2a;
+}
+
+/* Normal/unpaid */
+.wcip-status-badge.wcip-status-unpaid {
+    background: #f0f0f0;
+    color: #666;
+    border: 1px solid #e0e0e0;
+}
+
+.wcip-days-row {
+    padding-top: 4px;
+    border-top: 1px dashed #f0f0f0;
+    margin-top: 4px;
+}
+
+/* ===== Notification Center — Bell Icon ===== */
+
+.wcip-notification-center {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 9998;
+    direction: rtl;
+}
+
+.wcip-bell-btn {
+    position: relative;
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #555;
+    transition: border-color 0.2s, box-shadow 0.2s, color 0.2s;
+    padding: 0;
+}
+
+.wcip-bell-btn:hover {
+    border-color: #2a8a2a;
+    color: #2a8a2a;
+    box-shadow: 0 2px 8px rgba(42, 138, 42, 0.2);
+}
+
+.wcip-reminder-count {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #e04040;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: 2px solid #fff;
+    animation: wcipBellPulse 1.5s ease infinite;
+}
+
+@keyframes wcipBellPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* Dropdown */
+.wcip-reminder-dropdown {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    width: 340px;
+    max-height: 480px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    animation: wcipDropdownSlide 0.2s ease;
+}
+
+@keyframes wcipDropdownSlide {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.wcip-reminder-dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #f9f9f9;
+    border-radius: 10px 10px 0 0;
+}
+
+.wcip-reminder-dropdown-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #333;
+}
+
+.wcip-reminder-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.wcip-reminder-close:hover {
+    color: #333;
+}
+
+.wcip-reminder-list {
+    padding: 8px;
+}
+
+.wcip-reminder-loading,
+.wcip-reminder-empty {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+    font-size: 13px;
+}
+
+/* Reminder item */
+.wcip-reminder-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    transition: border-color 0.2s;
+    animation: wcipReminderFadeIn 0.2s ease;
+}
+
+@keyframes wcipReminderFadeIn {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.wcip-reminder-item:hover {
+    border-color: #ddd;
+}
+
+.wcip-reminder-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.wcip-reminder-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.wcip-reminder-status-due_soon .wcip-reminder-badge,
+.wcip-reminder-badge.wcip-reminder-status-due_soon {
+    background: #fff8e1;
+    color: #8a6d00;
+    border: 1px solid #ffe082;
+}
+
+.wcip-reminder-status-due_today .wcip-reminder-badge,
+.wcip-reminder-badge.wcip-reminder-status-due_today {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5a3a8;
+    font-weight: 700;
+}
+
+.wcip-reminder-status-overdue .wcip-reminder-badge,
+.wcip-reminder-badge.wcip-reminder-status-overdue {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    font-weight: 700;
+}
+
+.wcip-reminder-status-due_soon {
+    border-right: 3px solid #f0c040;
+}
+
+.wcip-reminder-status-due_today {
+    border-right: 3px solid #e04040;
+    background: #fff8f8;
+}
+
+.wcip-reminder-status-overdue {
+    border-right: 3px solid #b71c1c;
+    background: #fff5f5;
+}
+
+.wcip-reminder-dismiss {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #ccc;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.wcip-reminder-dismiss:hover {
+    color: #999;
+}
+
+.wcip-reminder-item-body p {
+    margin: 4px 0;
+    font-size: 13px;
+}
+
+.wcip-reminder-product {
+    font-weight: 600;
+    color: #333;
+}
+
+.wcip-reminder-desc {
+    color: #666;
+}
+
+.wcip-reminder-due {
+    color: #888;
+    font-size: 12px;
+}
+
+.wcip-reminder-days {
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.wcip-reminder-status-due_soon .wcip-reminder-days {
+    color: #c8800c;
+}
+
+.wcip-reminder-status-due_today .wcip-reminder-days {
+    color: #c03030;
+}
+
+.wcip-reminder-status-overdue .wcip-reminder-days {
+    color: #a01818;
+}
+
+.wcip-reminder-item-actions {
+    margin-top: 8px;
+}
+
+.wcip-reminder-pay-btn {
+    background: #2a8a2a !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 5px 14px !important;
+    border-radius: 5px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+}
+
+.wcip-reminder-pay-btn:hover {
+    background: #226a22 !important;
+    color: #fff !important;
+}
+
+/* Responsive — notification center */
+@media screen and (max-width: 480px) {
+    .wcip-notification-center {
+        top: 10px;
+        left: 10px;
+    }
+
+    .wcip-reminder-dropdown {
+        width: 300px;
+        max-width: calc(100vw - 20px);
+    }
+}
+
+/* ===== My Account — Installments page ===== */
+
+.wcip-account-installments {
+    direction: rtl;
+    max-width: 900px;
+}
+
+.wcip-account-installments h2 {
+    margin-bottom: 20px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #333;
+}
+
+.wcip-empty-state {
+    padding: 40px 20px;
+    text-align: center;
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    color: #777;
+    font-size: 14px;
+}
+
+.wcip-gateway-info {
+    background: #f0faf0;
+    border: 1px solid #d0e8d0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #2a6a2a;
+}
+
+/* Installment cards grid */
+.wcip-installments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.wcip-installment-card {
+    position: relative;
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 18px;
+    transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+}
+
+.wcip-installment-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+/* Next upcoming highlight */
+.wcip-installment-card.wcip-next-upcoming {
+    border-color: #2a8a2a;
+    background: linear-gradient(135deg, #f0faf0 0%, #ffffff 100%);
+    box-shadow: 0 2px 12px rgba(42, 138, 42, 0.15);
+}
+
+.wcip-next-badge {
+    position: absolute;
+    top: -10px;
+    right: 16px;
+    background: #2a8a2a;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+/* Status-specific card borders */
+.wcip-installment-card.wcip-status-paid {
+    border-color: #c3e6cb;
+    opacity: 0.85;
+}
+
+.wcip-installment-card.wcip-status-overdue {
+    border-color: #f5c6cb;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
+}
+
+/* Card header */
+.wcip-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.wcip-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #333;
+}
+
+/* Status badges */
+.wcip-status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.wcip-status-badge.wcip-status-paid {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.wcip-status-badge.wcip-status-unpaid {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.wcip-status-badge.wcip-status-overdue {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Card body rows */
+.wcip-card-body {
+    margin-bottom: 14px;
+}
+
+.wcip-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+}
+
+.wcip-card-label {
+    font-size: 13px;
+    color: #777;
+    font-weight: 500;
+}
+
+.wcip-card-value {
+    font-size: 13px;
+    color: #222;
+    font-weight: 600;
+}
+
+/* Card actions */
+.wcip-card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.wcip-pay-btn {
+    background: #2a8a2a !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 8px 18px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+}
+
+.wcip-pay-btn:hover {
+    background: #226a22 !important;
+    transform: scale(1.03);
+}
+
+.wcip-retry-btn {
+    background: #c8800c !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 8px 18px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+}
+
+.wcip-retry-btn:hover {
+    background: #a8680c !important;
+}
+
+.wcip-invoice-btn {
+    background: #4a90d4 !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 8px 18px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    cursor: pointer;
+}
+
+.wcip-invoice-btn:hover {
+    background: #3a7ac4 !important;
+    color: #fff !important;
+}
+
+/* Card status message (inline) */
+.wcip-card-status-msg {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    text-align: center;
+}
+
+.wcip-card-status-msg.wcip-msg-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.wcip-card-status-msg.wcip-msg-fail {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.wcip-card-status-msg.wcip-msg-pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* Loading spinner */
+.wcip-card-loading {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #ccc;
+    border-top-color: #2a8a2a;
+    border-radius: 50%;
+    animation: wcipSpin 0.6s linear infinite;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+@keyframes wcipSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* ===== Modals ===== */
+
+.wcip-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: wcipModalFadeIn 0.2s ease;
+}
+
+@keyframes wcipModalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.wcip-modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 32px 36px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    position: relative;
+    animation: wcipModalSlideUp 0.3s ease;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes wcipModalSlideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.wcip-modal-close {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    font-size: 24px;
+    color: #999;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.wcip-modal-close:hover {
+    color: #333;
+}
+
+.wcip-modal-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    font-size: 32px;
+    font-weight: 700;
+}
+
+.wcip-modal-success-icon {
+    background: #d4edda;
+    color: #155724;
+}
+
+.wcip-modal-fail-icon {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.wcip-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #333;
+    margin: 0 0 10px 0;
+}
+
+.wcip-modal-body {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 20px 0;
+    line-height: 1.6;
+}
+
+.wcip-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.wcip-modal-actions .button {
+    padding: 8px 20px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+}
+
+.wcip-modal-invoice-btn {
+    background: #4a90d4 !important;
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+.wcip-modal-retry-btn {
+    background: #c8800c !important;
+    color: #fff !important;
+}
+
+.wcip-modal-close-btn {
+    background: #e0e0e0 !important;
+    color: #555 !important;
+}
+
+/* Responsive */
+@media screen and (max-width: 768px) {
+    .wcip-installments-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .wcip-payment-methods {
+        flex-direction: column;
+    }
+
+    .wcip-payment-method-option {
+        min-width: 100%;
+    }
+
+    .wcip-plan-radios {
+        flex-direction: column;
+    }
+
+    .wcip-plan-option {
+        min-width: 100%;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .wcip-payment-selector-wrapper {
+        padding: 14px;
+    }
+
+    .wcip-breakdown-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .wcip-breakdown-label {
+        font-size: 13px;
+    }
+
+    .wcip-breakdown-value {
+        font-size: 15px;
+    }
+
+    .wcip-modal-content {
+        padding: 24px 20px;
+    }
+}

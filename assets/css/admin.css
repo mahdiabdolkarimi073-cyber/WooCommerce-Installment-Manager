@@ -1,0 +1,289 @@
+/* ===== Admin styles for WooCommerce Installment Payment v2.0 ===== */
+
+/* Product data tab panel */
+#wcip_product_installment_data .options_group {
+    padding: 10px 20px;
+}
+
+#wcip_product_installment_data .form-field {
+    margin-bottom: 12px;
+}
+
+#wcip_product_installment_data .form-field label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+#wcip_product_installment_data .form-field input[type="text"],
+#wcip_product_installment_data .form-field input[type="number"],
+#wcip_product_installment_data .form-field select {
+    width: 100%;
+    max-width: 300px;
+}
+
+/* RTL: ensure proper alignment for Persian text */
+.rtl #wcip_product_installment_data .form-field label {
+    text-align: right;
+}
+
+/* Plans builder */
+.wcip-plans-builder {
+    padding: 16px 0;
+}
+
+.wcip-plans-builder h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+.wcip-plans-desc {
+    font-size: 12px;
+    color: #777;
+    margin: 0 0 14px 0;
+}
+
+.wcip-plans-table {
+    max-width: 500px;
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+}
+
+.wcip-plans-table thead th {
+    padding: 8px 10px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 700;
+    color: #555;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.wcip-plans-table tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.wcip-plans-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.wcip-plans-table input[type="number"] {
+    width: 100%;
+    max-width: 120px;
+}
+
+.wcip-plan-row {
+    animation: wcipAdminFadeIn 0.2s ease;
+}
+
+@keyframes wcipAdminFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.wcip-remove-plan {
+    color: #a03030 !important;
+    border-color: #e0c0c0 !important;
+}
+
+.wcip-remove-plan:hover {
+    background: #fff0f0 !important;
+    border-color: #c08080 !important;
+}
+
+/* Admin order meta box table */
+.wcip-admin-order-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.wcip-admin-order-table tr:last-child td {
+    border-bottom: none;
+}
+
+.wcip-admin-order-table td:first-child {
+    color: #555;
+}
+
+/* WooCommerce settings tab */
+.woocommerce table.form-table .wcip_settings_title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* ===== Installments management page ===== */
+
+.wcip-admin-installments-wrap {
+    direction: rtl;
+}
+
+.wcip-admin-installments-wrap h1 {
+    margin-bottom: 20px;
+}
+
+/* Status badges */
+.wcip-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.wcip-badge-paid {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.wcip-badge-unpaid {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.wcip-badge-overdue {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* List table row actions */
+.wcip-admin-installments-wrap .row-actions a.wcip-delete-installment {
+    color: #a00;
+}
+
+.wcip-admin-installments-wrap .row-actions a.wcip-delete-installment:hover {
+    color: #dc3232;
+}
+
+/* Filter bar */
+.wcip-admin-installments-wrap .tablenav .actions select,
+.wcip-admin-installments-wrap .tablenav .actions input[type="search"] {
+    margin-right: 6px;
+}
+
+/* ===== Edit installment form ===== */
+
+.wcip-admin-edit-wrap {
+    direction: rtl;
+    max-width: 800px;
+}
+
+.wcip-edit-info-bar {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 16px 0 24px 0;
+}
+
+.wcip-edit-info-bar p {
+    margin: 6px 0;
+    font-size: 13px;
+    color: #555;
+}
+
+.wcip-edit-info-bar p strong {
+    color: #333;
+    min-width: 80px;
+    display: inline-block;
+}
+
+.wcip-edit-form .form-table th {
+    text-align: right;
+    width: 200px;
+    padding: 15px 10px 15px 0;
+}
+
+.wcip-edit-form .form-table td {
+    padding: 15px 0;
+}
+
+.wcip-edit-form .form-table input[type="text"],
+.wcip-edit-form .form-table select,
+.wcip-edit-form .form-table textarea {
+    max-width: 400px;
+}
+
+.wcip-edit-form .description {
+    font-size: 12px;
+    color: #777;
+    margin-top: 4px;
+}
+
+.wcip-jalali-input {
+    direction: ltr;
+    text-align: right;
+}
+
+/* ===== My Account installments page ===== */
+
+.wcip-my-account-installments {
+    direction: rtl;
+}
+
+.wcip-my-account-installments h2 {
+    margin-bottom: 16px;
+}
+
+.wcip-gateway-info {
+    background: #f0faf0;
+    border: 1px solid #d0e8d0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #2a6a2a;
+}
+
+.wcip-my-account-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.wcip-my-account-table th,
+.wcip-my-account-table td {
+    padding: 10px 12px;
+    text-align: right;
+    border-bottom: 1px solid #e8e8e8;
+    font-size: 14px;
+}
+
+.wcip-my-account-table th {
+    font-weight: 600;
+    color: #555;
+}
+
+.wcip-status-overdue {
+    color: #c03030;
+    font-weight: 600;
+}
+
+.wcip-status-unpaid {
+    color: #c8800c;
+    font-weight: 600;
+}
+
+.wcip-status-paid {
+    color: #2a8a2a;
+    font-weight: 600;
+}
+
+/* Responsive */
+@media screen and (max-width: 782px) {
+    .wcip-edit-form .form-table th {
+        width: auto;
+        padding-bottom: 4px;
+    }
+
+    .wcip-edit-form .form-table input[type="text"],
+    .wcip-edit-form .form-table select,
+    .wcip-edit-form .form-table textarea {
+        max-width: 100%;
+    }
+}
