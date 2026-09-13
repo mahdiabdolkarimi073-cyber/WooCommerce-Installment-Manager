@@ -39,7 +39,11 @@ if (!class_exists('WCIP_Checkout')) {
         {
             add_action('woocommerce_after_cart_item_name', array($this, 'display_cart_item_breakdown'), 10, 2);
             add_filter('woocommerce_cart_item_name', array($this, 'display_checkout_item_breakdown'), 10, 3);
-            add_action('woocommerce_before_calculate_totals', array($this, 'adjust_cart_item_prices'), 99, 1);
+            add_filter('woocommerce_cart_item_price', array($this, 'filter_cart_item_price'), 10, 3);
+            add_filter('woocommerce_cart_item_subtotal', array($this, 'filter_cart_item_subtotal'), 10, 3);
+            add_action('woocommerce_before_calculate_totals', array($this, 'adjust_cart_item_prices'), 10, 1);
+            add_action('woocommerce_cart_totals_before_order_total', array($this, 'render_installment_total_rows'));
+            add_action('woocommerce_review_order_before_order_total', array($this, 'render_installment_total_rows'));
             add_action('woocommerce_checkout_create_order', array($this, 'save_order_installment_meta'), 10, 2);
             add_action('woocommerce_checkout_create_order_line_item', array($this, 'save_order_line_item_meta'), 10, 4);
             add_action('woocommerce_order_details_after_order_table', array($this, 'display_order_received_breakdown'));
@@ -84,6 +88,119 @@ if (!class_exists('WCIP_Checkout')) {
                         ));
                     }
                 }
+            }
+        }
+
+        /**
+         * Replaces the per-line price column on the cart page with the
+         * installment breakdown (down payment + monthly) for installment items.
+         *
+         * @param string $price_html     Original price HTML.
+         * @param array  $cart_item      Cart item array.
+         * @param string $cart_item_key   Cart item key.
+         * @return string
+         */
+        public function filter_cart_item_price($price_html, $cart_item, $cart_item_key)
+        {
+            if (empty($cart_item['wcip_payment_method']) || $cart_item['wcip_payment_method'] !== 'installment') {
+                return $price_html;
+            }
+
+            return $this->build_price_breakdown_html($cart_item);
+        }
+
+        /**
+         * Replaces the per-line subtotal column on the cart page for
+         * installment items with the same breakdown.
+         *
+         * @param string $subtotal_html  Original subtotal HTML.
+         * @param array  $cart_item      Cart item array.
+         * @param string $cart_item_key   Cart item key.
+         * @return string
+         */
+        public function filter_cart_item_subtotal($subtotal_html, $cart_item, $cart_item_key)
+        {
+            if (empty($cart_item['wcip_payment_method']) || $cart_item['wcip_payment_method'] !== 'installment') {
+                return $subtotal_html;
+            }
+
+            return $this->build_price_breakdown_html($cart_item);
+        }
+
+        /**
+         * Builds the HTML breakdown shown in the price/subtotal column.
+         *
+         * @param array $cart_item Cart item with installment data.
+         * @return string
+         */
+        private function build_price_breakdown_html($cart_item)
+        {
+            $down    = isset($cart_item['wcip_down_payment'])         ? $cart_item['wcip_down_payment']         : 0;
+            $monthly = isset($cart_item['wcip_monthly_installment']) ? $cart_item['wcip_monthly_installment'] : 0;
+            $months  = isset($cart_item['wcip_plan_months'])         ? $cart_item['wcip_plan_months']         : 0;
+            $total   = isset($cart_item['wcip_total_payable'])        ? $cart_item['wcip_total_payable']        : 0;
+
+            ob_start();
+            ?>
+            <div class="wcip-price-breakdown">
+                <div class="wcip-price-row wcip-price-down">
+                    <span class="wcip-price-label"><?php esc_html_e('پیش‌پرداخت', 'wc-installment'); ?></span>
+                    <span class="wcip-price-value"><?php echo esc_html(wcip_format_toman($down)); ?></span>
+                </div>
+                <div class="wcip-price-row wcip-price-monthly">
+                    <span class="wcip-price-label"><?php echo esc_html(number_to_persian($months) . ' ' . __('قسط ماهانه', 'wc-installment')); ?></span>
+                    <span class="wcip-price-value"><?php echo esc_html(wcip_format_toman($monthly)); ?></span>
+                </div>
+                <div class="wcip-price-row wcip-price-total">
+                    <span class="wcip-price-label"><?php esc_html_e('جمع کل قابل پرداخت', 'wc-installment'); ?></span>
+                    <span class="wcip-price-value"><?php echo esc_html(wcip_format_toman($total)); ?></span>
+                </div>
+            </div>
+            <?php
+            return ob_get_clean();
+        }
+
+        /**
+         * Renders extra rows (down payment, monthly, total payable) inside the
+         * cart-totals and checkout-review totals tables so the customer sees the
+         * full installment summary alongside the amount due today.
+         */
+        public function render_installment_total_rows()
+        {
+            if (!WC()->cart) {
+                return;
+            }
+
+            $items = array();
+            foreach (WC()->cart->get_cart() as $cart_item) {
+                if (!empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment') {
+                    $items[] = $cart_item;
+                }
+            }
+
+            if (empty($items)) {
+                return;
+            }
+
+            foreach ($items as $item) {
+                $down    = isset($item['wcip_down_payment'])         ? $item['wcip_down_payment']         : 0;
+                $monthly = isset($item['wcip_monthly_installment']) ? $item['wcip_monthly_installment'] : 0;
+                $months  = isset($item['wcip_plan_months'])         ? $item['wcip_plan_months']         : 0;
+                $total   = isset($item['wcip_total_payable'])        ? $item['wcip_total_payable']        : 0;
+                ?>
+                <tr class="wcip-totals-row wcip-totals-down-payment">
+                    <th><?php esc_html_e('پیش‌پرداخت (امروز)', 'wc-installment'); ?></th>
+                    <td><?php echo esc_html(wcip_format_toman($down)); ?></td>
+                </tr>
+                <tr class="wcip-totals-row wcip-totals-monthly">
+                    <th><?php echo esc_html(number_to_persian($months) . ' ' . __('قسط ماهانه', 'wc-installment')); ?></th>
+                    <td><?php echo esc_html(wcip_format_toman($monthly) . ' / ' . __('ماه', 'wc-installment')); ?></td>
+                </tr>
+                <tr class="wcip-totals-row wcip-totals-total-payable">
+                    <th><?php esc_html_e('جمع کل قابل پرداخت', 'wc-installment'); ?></th>
+                    <td><?php echo esc_html(wcip_format_toman($total)); ?></td>
+                </tr>
+                <?php
             }
         }
 

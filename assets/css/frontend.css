@@ -1535,3 +1535,85 @@
 .wcip-toggle-breakdown-text strong {
     color: #1b5e20;
 }
+
+/* ===== Cart/Checkout price column breakdown ===== */
+
+.wcip-price-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    background: #f0faf0;
+    border: 1px solid #d0e8d0;
+    border-radius: 8px;
+    direction: rtl;
+}
+
+.wcip-price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.wcip-price-label {
+    font-size: 12px;
+    color: #555;
+    font-weight: 600;
+}
+
+.wcip-price-value {
+    font-size: 13px;
+    color: #222;
+    font-weight: 700;
+}
+
+.wcip-price-total .wcip-price-label,
+.wcip-price-total .wcip-price-value {
+    font-size: 14px;
+    color: #2a6a2a;
+}
+
+.wcip-price-row + .wcip-price-total {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px dashed #c0d8c0;
+}
+
+/* Cart/checkout totals table — extra installment rows */
+
+.wcip-totals-row th {
+    font-size: 13px;
+    color: #555;
+    font-weight: 600;
+}
+
+.wcip-totals-row td {
+    font-size: 14px;
+    color: #222;
+    font-weight: 700;
+}
+
+.wcip-totals-down-payment th,
+.wcip-totals-down-payment td {
+    color: #2a8a2a;
+}
+
+.wcip-totals-total-payable th,
+.wcip-totals-total-payable td {
+    color: #2a6a2a;
+    font-size: 15px;
+}
+
+.wcip-totals-total-payable td {
+    font-weight: 800;
+}
+
+/* Gateway box breakdown on checkout */
+
+.wcip-checkout-gateway-breakdown .wcip-installment-breakdown {
+    padding: 12px;
+    background: #f8fff8;
+    border: 1px solid #d8ecd8;
+    border-radius: 6px;
+}
