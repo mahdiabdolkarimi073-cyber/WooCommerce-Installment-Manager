@@ -200,27 +200,29 @@ if (!class_exists('WCIP_Frontend')) {
                     <button type="button" class="wcip-modal-close">&times;</button>
                     <h3 class="wcip-confirm-title"><?php esc_html_e('تأیید خرید اقساطی', 'wc-installment'); ?></h3>
                     <div class="wcip-confirm-body">
-                        <div class="wcip-confirm-row">
-                            <span class="wcip-confirm-label"><?php esc_html_e('مبلغ پیش‌پرداخت', 'wc-installment'); ?></span>
-                            <span class="wcip-confirm-value" id="wcip-confirm-down">—</span>
+                        <div class="wcip-confirm-rows-card">
+                            <div class="wcip-confirm-row">
+                                <span class="wcip-confirm-label"><?php esc_html_e('مبلغ پیش‌پرداخت', 'wc-installment'); ?></span>
+                                <span class="wcip-confirm-value" id="wcip-confirm-down">—</span>
+                            </div>
+                            <div class="wcip-confirm-row">
+                                <span class="wcip-confirm-label"><?php esc_html_e('مبلغ باقی‌مانده', 'wc-installment'); ?></span>
+                                <span class="wcip-confirm-value" id="wcip-confirm-remaining">—</span>
+                            </div>
+                            <div class="wcip-confirm-row">
+                                <span class="wcip-confirm-label"><?php esc_html_e('مبلغ کارمزد/سود', 'wc-installment'); ?></span>
+                                <span class="wcip-confirm-value" id="wcip-confirm-fee">—</span>
+                            </div>
+                            <div class="wcip-confirm-row">
+                                <span class="wcip-confirm-label"><?php esc_html_e('مبلغ هر قسط', 'wc-installment'); ?></span>
+                                <span class="wcip-confirm-value" id="wcip-confirm-monthly">—</span>
+                            </div>
+                            <div class="wcip-confirm-row">
+                                <span class="wcip-confirm-label"><?php esc_html_e('تعداد اقساط', 'wc-installment'); ?></span>
+                                <span class="wcip-confirm-value" id="wcip-confirm-months">—</span>
+                            </div>
                         </div>
-                        <div class="wcip-confirm-row">
-                            <span class="wcip-confirm-label"><?php esc_html_e('مبلغ باقی‌مانده', 'wc-installment'); ?></span>
-                            <span class="wcip-confirm-value" id="wcip-confirm-remaining">—</span>
-                        </div>
-                        <div class="wcip-confirm-row">
-                            <span class="wcip-confirm-label"><?php esc_html_e('مبلغ کارمزد/سود', 'wc-installment'); ?></span>
-                            <span class="wcip-confirm-value" id="wcip-confirm-fee">—</span>
-                        </div>
-                        <div class="wcip-confirm-row">
-                            <span class="wcip-confirm-label"><?php esc_html_e('مبلغ هر قسط', 'wc-installment'); ?></span>
-                            <span class="wcip-confirm-value" id="wcip-confirm-monthly">—</span>
-                        </div>
-                        <div class="wcip-confirm-row">
-                            <span class="wcip-confirm-label"><?php esc_html_e('تعداد اقساط', 'wc-installment'); ?></span>
-                            <span class="wcip-confirm-value" id="wcip-confirm-months">—</span>
-                        </div>
-                        <div class="wcip-confirm-row wcip-confirm-total">
+                        <div class="wcip-confirm-total">
                             <span class="wcip-confirm-label"><?php esc_html_e('مجموع قابل پرداخت', 'wc-installment'); ?></span>
                             <span class="wcip-confirm-value" id="wcip-confirm-total">—</span>
                         </div>
@@ -262,7 +264,24 @@ if (!class_exists('WCIP_Frontend')) {
             $payment_method = isset($_POST['wcip_selected_method']) ? sanitize_text_field(wp_unslash($_POST['wcip_selected_method'])) : 'cash';
             $selected_plan  = isset($_POST['wcip_selected_plan'])  ? sanitize_text_field(wp_unslash($_POST['wcip_selected_plan']))  : '';
 
-            if ($payment_method === 'installment' && $selected_plan !== '') {
+            wcip_debug_log('add_cart_item_data filter fired', array(
+                'product_id'      => $product_id,
+                'post_method'      => $payment_method,
+                'post_plan'        => $selected_plan,
+                'existing_method'  => isset($cart_item_data['wcip_payment_method']) ? $cart_item_data['wcip_payment_method'] : 'not_set',
+                'existing_keys'    => isset($cart_item_data['wcip_payment_method']) ? array_keys($cart_item_data) : array(),
+            ));
+
+            // If installment data was already set (e.g. by AJAX add-to-cart), keep it.
+            if (isset($cart_item_data['wcip_payment_method']) && $cart_item_data['wcip_payment_method'] === 'installment') {
+                wcip_debug_log('add_cart_item_data: preserving existing installment data', array(
+                    'product_id'    => $product_id,
+                    'months'        => isset($cart_item_data['wcip_plan_months']) ? $cart_item_data['wcip_plan_months'] : 'missing',
+                    'down_payment'  => isset($cart_item_data['wcip_down_payment']) ? $cart_item_data['wcip_down_payment'] : 'missing',
+                    'monthly'       => isset($cart_item_data['wcip_monthly_installment']) ? $cart_item_data['wcip_monthly_installment'] : 'missing',
+                    'total_payable' => isset($cart_item_data['wcip_total_payable']) ? $cart_item_data['wcip_total_payable'] : 'missing',
+                ));
+            } elseif ($payment_method === 'installment' && $selected_plan !== '') {
                 $cart_item_data['wcip_payment_method'] = 'installment';
                 $cart_item_data['wcip_selected_plan']  = $selected_plan;
 
@@ -283,8 +302,20 @@ if (!class_exists('WCIP_Frontend')) {
                         $cart_item_data['wcip_total_payable']        = $calc['total_payable'];
                     }
                 }
+
+                wcip_debug_log('add_cart_item_data: installment set from POST', array(
+                    'product_id'    => $product_id,
+                    'plan_idx'      => $selected_plan,
+                    'months'        => isset($cart_item_data['wcip_plan_months']) ? $cart_item_data['wcip_plan_months'] : 'missing',
+                    'down_payment'  => isset($cart_item_data['wcip_down_payment']) ? $cart_item_data['wcip_down_payment'] : 'missing',
+                    'monthly'       => isset($cart_item_data['wcip_monthly_installment']) ? $cart_item_data['wcip_monthly_installment'] : 'missing',
+                    'total_payable' => isset($cart_item_data['wcip_total_payable']) ? $cart_item_data['wcip_total_payable'] : 'missing',
+                ));
             } else {
                 $cart_item_data['wcip_payment_method'] = 'cash';
+                wcip_debug_log('add_cart_item_data: set to cash (no installment data)', array(
+                    'product_id' => $product_id,
+                ));
             }
 
             if (!isset($cart_item_data['unique_key'])) {
@@ -317,6 +348,16 @@ if (!class_exists('WCIP_Frontend')) {
                     $cart_item[$sk] = $values[$sk];
                 }
             }
+
+            wcip_debug_log('Cart item restored from session', array(
+                'cart_item_key' => $key,
+                'product_id' => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
+                'payment_method' => isset($cart_item['wcip_payment_method']) ? $cart_item['wcip_payment_method'] : 'missing',
+                'months' => isset($cart_item['wcip_plan_months']) ? $cart_item['wcip_plan_months'] : 'missing',
+                'down_payment' => isset($cart_item['wcip_down_payment']) ? $cart_item['wcip_down_payment'] : 'missing',
+                'monthly' => isset($cart_item['wcip_monthly_installment']) ? $cart_item['wcip_monthly_installment'] : 'missing',
+                'total_payable' => isset($cart_item['wcip_total_payable']) ? $cart_item['wcip_total_payable'] : 'missing',
+            ));
 
             return $cart_item;
         }
@@ -407,13 +448,31 @@ if (!class_exists('WCIP_Frontend')) {
             );
 
             if (!$cart_item_key) {
-                if (function_exists('wcip_debug_log')) {
-                    wcip_debug_log('AJAX add-to-cart: add_to_cart failed', array('product_id' => $product_id));
-                }
+                wcip_debug_log('AJAX add-to-cart: add_to_cart failed', array('product_id' => $product_id));
                 wp_send_json_error(array('message' => __('خطا در افزودن به سبد.', 'wc-installment')));
             }
 
+            $added_item = WC()->cart->get_cart_item($cart_item_key);
+            wcip_debug_log('AJAX add-to-cart: item after add_to_cart', array(
+                'cart_item_key' => $cart_item_key,
+                'product_id' => $product_id,
+                'item_keys' => $added_item ? array_keys($added_item) : array(),
+                'payment_method' => $added_item && isset($added_item['wcip_payment_method']) ? $added_item['wcip_payment_method'] : 'missing',
+                'months' => $added_item && isset($added_item['wcip_plan_months']) ? $added_item['wcip_plan_months'] : 'missing',
+                'down_payment' => $added_item && isset($added_item['wcip_down_payment']) ? $added_item['wcip_down_payment'] : 'missing',
+                'monthly' => $added_item && isset($added_item['wcip_monthly_installment']) ? $added_item['wcip_monthly_installment'] : 'missing',
+                'total_payable' => $added_item && isset($added_item['wcip_total_payable']) ? $added_item['wcip_total_payable'] : 'missing',
+            ));
+
             WC()->cart->calculate_totals();
+            WC()->cart->set_session();
+
+            wcip_debug_log('AJAX add-to-cart: session saved and redirecting', array(
+                'cart_item_key' => $cart_item_key,
+                'cart_contents_count' => WC()->cart->get_cart_contents_count(),
+                'cart_total' => WC()->cart->get_cart_contents_total(),
+                'redirect_url' => wc_get_checkout_url(),
+            ));
 
             wp_send_json_success(array('redirect_url' => wc_get_checkout_url()));
         }

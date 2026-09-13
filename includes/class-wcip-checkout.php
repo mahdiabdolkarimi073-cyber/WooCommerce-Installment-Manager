@@ -42,6 +42,7 @@ if (!class_exists('WCIP_Checkout')) {
             add_filter('woocommerce_cart_item_price', array($this, 'filter_cart_item_price'), 10, 3);
             add_filter('woocommerce_cart_item_subtotal', array($this, 'filter_cart_item_subtotal'), 10, 3);
             add_action('woocommerce_before_calculate_totals', array($this, 'adjust_cart_item_prices'), 10, 1);
+            add_action('woocommerce_cart_loaded_from_session', array($this, 'log_loaded_cart'), 20, 1);
             add_action('woocommerce_cart_totals_before_order_total', array($this, 'render_installment_total_rows'));
             add_action('woocommerce_review_order_before_order_total', array($this, 'render_installment_total_rows'));
             add_action('woocommerce_checkout_create_order', array($this, 'save_order_installment_meta'), 10, 2);
@@ -73,22 +74,56 @@ if (!class_exists('WCIP_Checkout')) {
                 return;
             }
 
-            foreach ($cart->get_cart() as $cart_item) {
+            foreach ($cart->cart_contents as $cart_item_key => &$cart_item) {
                 if (!empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment') {
                     $down = isset($cart_item['wcip_down_payment']) ? floatval($cart_item['wcip_down_payment']) : 0;
+                    $original_price = '';
                     if (isset($cart_item['data']) && is_object($cart_item['data'])) {
+                        $original_price = $cart_item['data']->get_price();
                         $cart_item['data']->set_price($down);
                     }
 
-                    if (function_exists('wcip_debug_log')) {
-                        wcip_debug_log('Cart price adjusted for installment item', array(
-                            'product_id'   => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
-                            'down_payment' => $down,
-                            'original_price' => (isset($cart_item['data']) && is_object($cart_item['data'])) ? $cart_item['data']->get_regular_price() : '',
-                        ));
-                    }
+                    wcip_debug_log('Cart price adjusted for installment item', array(
+                        'cart_item_key' => $cart_item_key,
+                        'product_id' => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
+                        'down_payment' => $down,
+                        'price_before' => $original_price,
+                        'price_after' => $down,
+                        'months' => isset($cart_item['wcip_plan_months']) ? $cart_item['wcip_plan_months'] : 0,
+                        'monthly' => isset($cart_item['wcip_monthly_installment']) ? $cart_item['wcip_monthly_installment'] : 0,
+                        'total_payable' => isset($cart_item['wcip_total_payable']) ? $cart_item['wcip_total_payable'] : 0,
+                    ));
                 }
             }
+            unset($cart_item);
+        }
+
+        /**
+         * Logs cart contents after WooCommerce restores them from the session.
+         *
+         * @param WC_Cart $cart Cart object.
+         */
+        public function log_loaded_cart($cart)
+        {
+            $items = array();
+            foreach ($cart->cart_contents as $cart_item_key => $cart_item) {
+                $items[] = array(
+                    'cart_item_key' => $cart_item_key,
+                    'product_id' => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
+                    'quantity' => isset($cart_item['quantity']) ? $cart_item['quantity'] : 0,
+                    'payment_method' => isset($cart_item['wcip_payment_method']) ? $cart_item['wcip_payment_method'] : 'missing',
+                    'selected_plan' => isset($cart_item['wcip_selected_plan']) ? $cart_item['wcip_selected_plan'] : 'missing',
+                    'months' => isset($cart_item['wcip_plan_months']) ? $cart_item['wcip_plan_months'] : 'missing',
+                    'down_payment' => isset($cart_item['wcip_down_payment']) ? $cart_item['wcip_down_payment'] : 'missing',
+                    'monthly' => isset($cart_item['wcip_monthly_installment']) ? $cart_item['wcip_monthly_installment'] : 'missing',
+                    'total_payable' => isset($cart_item['wcip_total_payable']) ? $cart_item['wcip_total_payable'] : 'missing',
+                );
+            }
+
+            wcip_debug_log('Cart loaded from WooCommerce session', array(
+                'item_count' => count($items),
+                'items' => $items,
+            ));
         }
 
         /**
@@ -139,6 +174,15 @@ if (!class_exists('WCIP_Checkout')) {
             $monthly = isset($cart_item['wcip_monthly_installment']) ? $cart_item['wcip_monthly_installment'] : 0;
             $months  = isset($cart_item['wcip_plan_months'])         ? $cart_item['wcip_plan_months']         : 0;
             $total   = isset($cart_item['wcip_total_payable'])        ? $cart_item['wcip_total_payable']        : 0;
+
+            wcip_debug_log('build_price_breakdown_html called', array(
+                'product_id'    => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
+                'down_payment'  => $down,
+                'monthly'       => $monthly,
+                'months'        => $months,
+                'total_payable' => $total,
+                'has_data'      => ($down > 0 || $monthly > 0 || $total > 0) ? 'yes' : 'no',
+            ));
 
             ob_start();
             ?>
@@ -294,12 +338,14 @@ if (!class_exists('WCIP_Checkout')) {
             }
 
             foreach ($cart->get_cart() as $cart_item) {
-                if (function_exists('wcip_debug_log')) {
-                    wcip_debug_log('Checkout: cart item check', array(
-                        'product_id'      => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
-                        'payment_method'  => isset($cart_item['wcip_payment_method']) ? $cart_item['wcip_payment_method'] : 'cash',
-                    ));
-                }
+                wcip_debug_log('Checkout: cart item check', array(
+                    'product_id'      => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
+                    'payment_method'  => isset($cart_item['wcip_payment_method']) ? $cart_item['wcip_payment_method'] : 'cash',
+                    'months'          => isset($cart_item['wcip_plan_months']) ? $cart_item['wcip_plan_months'] : 'missing',
+                    'down_payment'    => isset($cart_item['wcip_down_payment']) ? $cart_item['wcip_down_payment'] : 'missing',
+                    'monthly'         => isset($cart_item['wcip_monthly_installment']) ? $cart_item['wcip_monthly_installment'] : 'missing',
+                    'total_payable'   => isset($cart_item['wcip_total_payable']) ? $cart_item['wcip_total_payable'] : 'missing',
+                ));
                 if (!empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment') {
                     $has_installment = true;
 
@@ -322,6 +368,15 @@ if (!class_exists('WCIP_Checkout')) {
                     $order->update_meta_data('_installment_total_payable', $total);
                     $order->update_meta_data('_installment_remaining_amount', $remaining);
                     $order->update_meta_data('_installment_method', 'months');
+
+                    wcip_debug_log('Checkout: installment meta saved to order', array(
+                        'product_id'      => isset($cart_item['product_id']) ? $cart_item['product_id'] : 0,
+                        'down_payment'    => $down,
+                        'monthly'         => $monthly,
+                        'months'          => $months,
+                        'total_payable'   => $total,
+                        'remaining'       => $remaining,
+                    ));
                 }
             }
 
@@ -601,6 +656,7 @@ if (!class_exists('WCIP_Checkout')) {
             }
 
             $cart->calculate_totals();
+            $cart->set_session();
 
             $breakdown_html = '';
             if ($enable) {
@@ -610,6 +666,13 @@ if (!class_exists('WCIP_Checkout')) {
                 ));
                 $breakdown_html = ob_get_clean();
             }
+
+            wcip_debug_log('AJAX toggle: completed, session saved', array(
+                'cart_item_key' => $cart_item_key,
+                'enable'        => $enable ? 'yes' : 'no',
+                'cart_total'    => $cart->get_cart_contents_total(),
+                'breakdown_len' => strlen($breakdown_html),
+            ));
 
             wp_send_json_success(array(
                 'breakdown_html' => $breakdown_html,
