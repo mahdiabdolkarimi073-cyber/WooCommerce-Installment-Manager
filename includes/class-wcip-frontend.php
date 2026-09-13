@@ -35,6 +35,9 @@ if (!class_exists('WCIP_Frontend')) {
             add_filter('woocommerce_get_item_data', array($this, 'get_item_data'), 10, 2);
             add_action('wp_ajax_wcip_add_installment_to_cart', array($this, 'ajax_add_installment_to_cart'));
             add_action('wp_ajax_nopriv_wcip_add_installment_to_cart', array($this, 'ajax_add_installment_to_cart'));
+
+            add_action('wp_ajax_wcip_add_cash_to_cart', array($this, 'ajax_add_cash_to_cart'));
+            add_action('wp_ajax_nopriv_wcip_add_cash_to_cart', array($this, 'ajax_add_cash_to_cart'));
         }
 
         /**
@@ -383,6 +386,90 @@ if (!class_exists('WCIP_Frontend')) {
             $item_data[] = array('key' => __('مجموع قابل پرداخت', 'wc-installment'), 'value' => wcip_format_toman($total));
 
             return $item_data;
+        }
+
+        /**
+         * AJAX: add a cash-mode product to cart with full debug logging.
+         */
+        public function ajax_add_cash_to_cart()
+        {
+            wcip_debug_log('AJAX cash add-to-cart: request received', array(
+                'post_data' => isset($_POST) ? wp_json_encode(array_keys($_POST)) : 'empty',
+                'action'    => isset($_POST['action']) ? sanitize_text_field($_POST['action']) : 'missing',
+            ));
+
+            check_ajax_referer('wcip-add-to-cart', 'nonce');
+
+            $product_id   = isset($_POST['product_id'])   ? intval($_POST['product_id'])   : 0;
+            $variation_id = isset($_POST['variation_id']) ? intval($_POST['variation_id']) : 0;
+            $quantity     = isset($_POST['quantity'])      ? intval($_POST['quantity'])      : 1;
+
+            wcip_debug_log('AJAX cash add-to-cart: parsed input', array(
+                'product_id'   => $product_id,
+                'variation_id' => $variation_id,
+                'quantity'     => $quantity,
+            ));
+
+            if ($product_id < 1) {
+                wcip_debug_log('AJAX cash add-to-cart: invalid product_id', array('product_id' => $product_id));
+                wp_send_json_error(array('message' => __('محصول نامعتبر.', 'wc-installment')));
+            }
+
+            $product = wc_get_product($product_id);
+            if (!$product) {
+                wcip_debug_log('AJAX cash add-to-cart: product not found', array('product_id' => $product_id));
+                wp_send_json_error(array('message' => __('محصول یافت نشد.', 'wc-installment')));
+            }
+
+            if ($product->is_type('variable') && $variation_id < 1) {
+                wcip_debug_log('AJAX cash add-to-cart: variable product without variation', array('product_id' => $product_id));
+                wp_send_json_error(array('message' => __('لطفاً یک مدل از محصول را انتخاب کنید.', 'wc-installment')));
+            }
+
+            $cart_item_data = array(
+                'wcip_payment_method' => 'cash',
+                'unique_key'          => md5(microtime() . rand()),
+            );
+
+            wcip_debug_log('AJAX cash add-to-cart: calling WC()->cart->add_to_cart', array(
+                'product_id'   => $product_id,
+                'quantity'     => $quantity,
+                'variation_id' => $variation_id,
+                'cart_item_data' => wp_json_encode($cart_item_data),
+            ));
+
+            $cart_item_key = WC()->cart->add_to_cart(
+                $product_id,
+                $quantity,
+                $variation_id,
+                array(),
+                $cart_item_data
+            );
+
+            if (!$cart_item_key) {
+                wcip_debug_log('AJAX cash add-to-cart: add_to_cart returned false', array(
+                    'product_id'   => $product_id,
+                    'wc_notices'   => wc_get_notices(),
+                    'cart_contents_count' => WC()->cart->get_cart_contents_count(),
+                ));
+                wp_send_json_error(array('message' => __('خطا در افزودن به سبد خرید.', 'wc-installment')));
+            }
+
+            WC()->cart->calculate_totals();
+            WC()->cart->set_session();
+
+            wcip_debug_log('AJAX cash add-to-cart: success', array(
+                'cart_item_key'       => $cart_item_key,
+                'cart_contents_count' => WC()->cart->get_cart_contents_count(),
+                'cart_total'          => WC()->cart->get_cart_contents_total(),
+                'cart_url'            => wc_get_cart_url(),
+            ));
+
+            wp_send_json_success(array(
+                'cart_url'      => wc_get_cart_url(),
+                'cart_count'    => WC()->cart->get_cart_contents_count(),
+                'message'       => __('محصول به سبد خرید اضافه شد.', 'wc-installment'),
+            ));
         }
 
         /**

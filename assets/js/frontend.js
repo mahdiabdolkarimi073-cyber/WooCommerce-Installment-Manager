@@ -110,20 +110,70 @@
 
     /* --- Cash "Add to Cart" button --- */
     function hookCashButton() {
-        $(document).on('click', '#wcip-add-cash-btn', function () {
-            var $btn   = $(this);
-            var $form  = $('form.cart');
-            if (!$form.length) return;
+        $(document).on('click', '#wcip-add-cash-btn', function (e) {
+            e.preventDefault();
 
-            // Remove any old hidden wcip fields, inject cash flag, submit.
-            $form.find('.wcip-cart-hidden-fields').remove();
-            $('<div class="wcip-cart-hidden-fields" style="display:none;">' +
-              '<input type="hidden" name="wcip_selected_method" value="cash">' +
-              '<input type="hidden" name="wcip_selected_plan" value="">' +
-              '</div>').appendTo($form);
+            var $btn       = $(this);
+            var productId  = $btn.data('product-id');
+            var ajax       = window.wcipAjax;
+            var $form      = $('form.cart');
+            var qty        = 1;
+            var variationId = 0;
 
+            if (!ajax || !ajax.ajaxUrl) {
+                console.error('[WCIP] ajax data not found');
+                alert('خطا: داده AJAX یافت نشد.');
+                return;
+            }
+
+            if ($form.length) {
+                var $qtyInput = $form.find('input[name="quantity"]');
+                if ($qtyInput.length) qty = parseInt($qtyInput.val(), 10) || 1;
+                var $varInput = $form.find('input[name="variation_id"]');
+                if ($varInput.length) variationId = parseInt($varInput.val(), 10) || 0;
+            }
+
+            console.log('[WCIP] Cash add-to-cart clicked', {
+                productId: productId,
+                qty: qty,
+                variationId: variationId,
+                ajaxUrl: ajax.ajaxUrl
+            });
+
+            var originalText = $btn.text();
             $btn.prop('disabled', true).text('در حال افزودن...');
-            $form.trigger('submit');
+
+            $.ajax({
+                url: ajax.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'wcip_add_cash_to_cart',
+                    nonce: ajax.nonce,
+                    product_id: productId,
+                    variation_id: variationId,
+                    quantity: qty
+                },
+                success: function (response) {
+                    console.log('[WCIP] Cash add-to-cart response', response);
+                    if (response.success) {
+                        $btn.prop('disabled', false).text(originalText);
+                        if (response.data.cart_url) {
+                            window.location.href = response.data.cart_url;
+                        } else {
+                            $(document.body).trigger('wc_fragment_refresh');
+                        }
+                    } else {
+                        $btn.prop('disabled', false).text(originalText);
+                        var msg = response.data && response.data.message ? response.data.message : 'خطا در افزودن به سبد.';
+                        alert(msg);
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error('[WCIP] Cash add-to-cart AJAX error', { status: status, error: error });
+                    $btn.prop('disabled', false).text(originalText);
+                    alert('خطا در ارتباط با سرور.');
+                }
+            });
         });
     }
 
