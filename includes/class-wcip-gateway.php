@@ -31,7 +31,7 @@ if (!class_exists('WC_Gateway_WCIP_Installment')) {
             $this->plugin_id          = 'woocommerce_';
             $this->method_title       = __('پرداخت اقساطی', 'wc-installment');
             $this->method_description = __('درگاه پرداخت اقساطی — پیش‌پرداخت در زمان خرید و مابقی اقساط طبق زمان‌بندی تعیین‌شده.', 'wc-installment');
-            $this->has_fields         = false;
+            $this->has_fields         = true;
             $this->supports           = array('products');
 
             // Initialize gateway settings before reading options.
@@ -82,6 +82,49 @@ if (!class_exists('WC_Gateway_WCIP_Installment')) {
                     'desc_tip'    => true,
                 ),
             );
+        }
+
+        /**
+         * Renders the installment breakdown inside the gateway box on the
+         * checkout page so the customer sees down payment, monthly amount,
+         * installment count and total payable before placing the order.
+         */
+        public function payment_fields()
+        {
+            parent::payment_fields();
+
+            if (!WC()->cart) {
+                return;
+            }
+
+            $items = array();
+            foreach (WC()->cart->get_cart() as $cart_item) {
+                if (!empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment') {
+                    $items[] = $cart_item;
+                }
+            }
+
+            if (empty($items)) {
+                return;
+            }
+
+            echo '<div class="wcip-checkout-gateway-breakdown" style="margin-top:12px;">';
+
+            foreach ($items as $item) {
+                $down   = isset($item['wcip_down_payment'])         ? $item['wcip_down_payment']         : 0;
+                $monthly= isset($item['wcip_monthly_installment']) ? $item['wcip_monthly_installment'] : 0;
+                $months = isset($item['wcip_plan_months'])         ? $item['wcip_plan_months']         : 0;
+                $total  = isset($item['wcip_total_payable'])        ? $item['wcip_total_payable']        : 0;
+
+                echo '<div class="wcip-installment-breakdown" style="margin-bottom:10px;">';
+                echo '<div class="wcip-breakdown-row"><span class="wcip-breakdown-label">' . esc_html__('مبلغ پیش‌پرداخت', 'wc-installment') . '</span><span class="wcip-breakdown-value">' . esc_html(wcip_format_toman($down)) . '</span></div>';
+                echo '<div class="wcip-breakdown-row"><span class="wcip-breakdown-label">' . esc_html__('مبلغ هر قسط', 'wc-installment') . '</span><span class="wcip-breakdown-value">' . esc_html(wcip_format_toman($monthly)) . '</span></div>';
+                echo '<div class="wcip-breakdown-row"><span class="wcip-breakdown-label">' . esc_html__('تعداد اقساط', 'wc-installment') . '</span><span class="wcip-breakdown-value">' . esc_html(number_to_persian($months) . ' ' . __('ماه', 'wc-installment')) . '</span></div>';
+                echo '<div class="wcip-breakdown-row wcip-breakdown-total"><span class="wcip-breakdown-label">' . esc_html__('مجموع مبلغ قابل پرداخت', 'wc-installment') . '</span><span class="wcip-breakdown-value">' . esc_html(wcip_format_toman($total)) . '</span></div>';
+                echo '</div>';
+            }
+
+            echo '</div>';
         }
 
         /**

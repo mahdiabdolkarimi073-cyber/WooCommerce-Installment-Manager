@@ -31,6 +31,7 @@ if (!class_exists('WCIP_Frontend')) {
             add_action('woocommerce_after_add_to_cart_form', array($this, 'display_payment_selector'), 10);
 
             add_filter('woocommerce_add_cart_item_data', array($this, 'add_cart_item_data'), 10, 3);
+            add_filter('woocommerce_get_cart_item_from_session', array($this, 'get_cart_item_from_session'), 10, 3);
             add_filter('woocommerce_get_item_data', array($this, 'get_item_data'), 10, 2);
             add_action('wp_ajax_wcip_add_installment_to_cart', array($this, 'ajax_add_installment_to_cart'));
             add_action('wp_ajax_nopriv_wcip_add_installment_to_cart', array($this, 'ajax_add_installment_to_cart'));
@@ -291,6 +292,33 @@ if (!class_exists('WCIP_Frontend')) {
             }
 
             return $cart_item_data;
+        }
+
+        /**
+         * Restores custom installment cart-item data when the cart is loaded
+         * from the WooCommerce session. Without this, data saved by
+         * add_cart_item_data is lost on the next page load (e.g. checkout),
+         * so the installment breakdown never appears.
+         */
+        public function get_cart_item_from_session($cart_item, $values, $key)
+        {
+            $session_keys = array(
+                'wcip_payment_method',
+                'wcip_selected_plan',
+                'wcip_plan_months',
+                'wcip_plan_interest',
+                'wcip_down_payment',
+                'wcip_monthly_installment',
+                'wcip_total_payable',
+            );
+
+            foreach ($session_keys as $sk) {
+                if (isset($values[$sk])) {
+                    $cart_item[$sk] = $values[$sk];
+                }
+            }
+
+            return $cart_item;
         }
 
         /**
