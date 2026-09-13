@@ -17,12 +17,11 @@
         return toPersian(formatted) + ' تومان';
     }
 
-    /* --- Calculation utility (matches PHP calculate_for_plan logic) --- */
+    /* --- Calculation utility (mirrors PHP calculate_for_plan logic) --- */
     function calculatePlan(price, dpType, dpValue, months, interestRate) {
         if (price <= 0 || months < 1) {
             return null;
         }
-
         var downPayment;
         if (dpType === 'percentage') {
             downPayment = price * (dpValue / 100);
@@ -49,40 +48,37 @@
         };
     }
 
-    /* --- Main controller --- */
+    /* --- Update installment detail panel --- */
     function updateInstallmentDetails() {
         var data = window.wcipData;
-        if (!data || !data.enabled) {
-            return;
-        }
+        if (!data || !data.enabled) return;
 
-        var $wrapper = $('.wcip-payment-selector-wrapper');
-        var method = $wrapper.find('input[name="wcip_payment_method"]:checked').val();
-        var planIdx = parseInt($wrapper.find('input[name="wcip_installment_plan"]:checked').val(), 10);
-        var $details = $wrapper.find('.wcip-installment-details');
-        var $error = $wrapper.find('#wcip-plan-error');
+        var $wrapper   = $('.wcip-payment-selector-wrapper');
+        var method     = $wrapper.find('input[name="wcip_payment_method"]:checked').val();
+        var $details   = $wrapper.find('.wcip-installment-details');
+        var $error     = $wrapper.find('#wcip-plan-error');
+        var $installBtn = $('#wcip-add-installment-btn');
 
-        if (method === 'cash') {
+        if (method !== 'installment') {
             $details.slideUp(200);
-            $wrapper.find('#wcip-selected-method').val('cash');
-            $wrapper.find('#wcip-selected-plan').val('');
             $error.hide();
+            if ($installBtn.length) $installBtn.prop('disabled', false);
             return;
         }
 
-        // Installment mode
         $details.slideDown(200);
-        $wrapper.find('#wcip-selected-method').val('installment');
 
-        // Validate plan selection
-        if (isNaN(planIdx) || !data.plans[planIdx]) {
+        var planInput = $wrapper.find('input[name="wcip_installment_plan"]:checked');
+        var planIdx = planInput.length ? parseInt(planInput.val(), 10) : 0;
+
+        if (isNaN(planIdx) || !data.plans || !data.plans[planIdx]) {
             $error.show();
-            $wrapper.find('#wcip-selected-plan').val('');
+            if ($installBtn.length) $installBtn.prop('disabled', true);
             return;
         }
 
         $error.hide();
-        $wrapper.find('#wcip-selected-plan').val(planIdx);
+        if ($installBtn.length) $installBtn.prop('disabled', false);
 
         var plan = data.plans[planIdx];
         var calc = calculatePlan(
@@ -92,10 +88,7 @@
             plan.months,
             plan.interestRate
         );
-
-        if (!calc) {
-            return;
-        }
+        if (!calc) return;
 
         $wrapper.find('#wcip-down-payment').text(formatToman(calc.downPayment));
         $wrapper.find('#wcip-remaining-amount').text(formatToman(calc.remaining));
@@ -104,61 +97,54 @@
         $wrapper.find('#wcip-installment-count').text(toPersian(plan.months) + ' ماه');
         $wrapper.find('#wcip-total-payable').text(formatToman(calc.totalPayable));
 
-        // Down payment notice
-        var $notice = $wrapper.find('#wcip-down-payment-notice');
+        var $notice     = $wrapper.find('#wcip-down-payment-notice');
         var $noticeText = $wrapper.find('#wcip-down-payment-notice-text');
         if (calc.downPayment > 0) {
-            $notice.show();
-            $noticeText.text(
-                'پیش‌پرداخت ' + formatToman(calc.downPayment) +
-                ' در زمان خرید از درگاه پرداخت دریافت می‌شود.'
-            );
-            $notice.removeClass('wcip-notice-no-down').addClass('wcip-notice-has-down');
+            $notice.show().removeClass('wcip-notice-no-down').addClass('wcip-notice-has-down');
+            $noticeText.text('پیش‌پرداخت ' + formatToman(calc.downPayment) + ' در زمان خرید از درگاه پرداخت دریافت می‌شود.');
         } else {
-            $notice.show();
-            $noticeText.text(
-                'این محصول بدون پیش‌پرداخت است. کل مبلغ به‌صورت اقساطی پرداخت می‌شود.'
-            );
-            $notice.removeClass('wcip-notice-has-down').addClass('wcip-notice-no-down');
+            $notice.show().removeClass('wcip-notice-has-down').addClass('wcip-notice-no-down');
+            $noticeText.text('این محصول بدون پیش‌پرداخت است. کل مبلغ به‌صورت اقساطی پرداخت می‌شود.');
         }
     }
 
-    /* --- Add to cart: intercept and append hidden fields via AJAX data --- */
+    /* --- Cash "Add to Cart" button --- */
+    function hookCashButton() {
+        $(document).on('click', '#wcip-add-cash-btn', function () {
+            var $btn   = $(this);
+            var $form  = $('form.cart');
+            if (!$form.length) return;
+
+            // Remove any old hidden wcip fields, inject cash flag, submit.
+            $form.find('.wcip-cart-hidden-fields').remove();
+            $('<div class="wcip-cart-hidden-fields" style="display:none;">' +
+              '<input type="hidden" name="wcip_selected_method" value="cash">' +
+              '<input type="hidden" name="wcip_selected_plan" value="">' +
+              '</div>').appendTo($form);
+
+            $btn.prop('disabled', true).text('در حال افزودن...');
+            $form.trigger('submit');
+        });
+    }
+
+    /* --- Installment "Buy on Installments" button --- */
     var wcipInstallmentCalc = null;
 
-    function hookAddToCart() {
-        $(document).on('submit', 'form.cart', function (e) {
-            var $form = $(this);
-            var $wrapper = $form.find('.wcip-payment-selector-wrapper');
-
-            if ($wrapper.length === 0) {
-                return;
-            }
-
-            var method = $wrapper.find('input[name="wcip_payment_method"]:checked').val();
-
-            if (method !== 'installment') {
-                // Cash mode — let WooCommerce handle normally.
-                $form.find('.wcip-cart-hidden-fields').remove();
-                var $hidden = $('<div class="wcip-cart-hidden-fields" style="display:none;"></div>');
-                $hidden.append('<input type="hidden" name="wcip_selected_method" value="cash" />');
-                $hidden.append('<input type="hidden" name="wcip_selected_plan" value="" />');
-                $form.append($hidden);
-                return;
-            }
-
-            // Installment mode — stop the form, show confirmation modal.
-            e.preventDefault();
-            e.stopPropagation();
-
+    function hookInstallmentButton() {
+        $(document).on('click', '#wcip-add-installment-btn', function () {
             var data = window.wcipData;
-            if (!data || !data.enabled) {
-                return;
-            }
+            if (!data || !data.enabled) return;
 
-            var planIdx = parseInt($wrapper.find('input[name="wcip_installment_plan"]:checked').val(), 10);
-            if (isNaN(planIdx) || !data.plans[planIdx]) {
+            var $wrapper = $('.wcip-payment-selector-wrapper');
+            // Force installment radio checked
+            $wrapper.find('input[name="wcip_payment_method"][value="installment"]').prop('checked', true);
+
+            var planInput = $wrapper.find('input[name="wcip_installment_plan"]:checked');
+            var planIdx   = planInput.length ? parseInt(planInput.val(), 10) : 0;
+
+            if (isNaN(planIdx) || !data.plans || !data.plans[planIdx]) {
                 $wrapper.find('#wcip-plan-error').show();
+                $wrapper.find('.wcip-installment-details').slideDown(200);
                 return;
             }
 
@@ -170,18 +156,10 @@
                 plan.months,
                 plan.interestRate
             );
+            if (!calc) return;
 
-            if (!calc) {
-                return;
-            }
+            wcipInstallmentCalc = { planIdx: planIdx, calc: calc, months: plan.months };
 
-            wcipInstallmentCalc = {
-                planIdx: planIdx,
-                calc: calc,
-                months: plan.months
-            };
-
-            // Populate the confirmation modal.
             $('#wcip-confirm-down').text(formatToman(calc.downPayment));
             $('#wcip-confirm-remaining').text(formatToman(calc.remaining));
             $('#wcip-confirm-fee').text(formatToman(calc.interestAmount));
@@ -191,50 +169,43 @@
 
             var $notice = $('#wcip-confirm-notice');
             if (calc.downPayment > 0) {
-                $notice
-                    .removeClass('wcip-notice-no-down')
-                    .addClass('wcip-notice-has-down')
+                $notice.removeClass('wcip-notice-no-down').addClass('wcip-notice-has-down')
                     .text('پیش‌پرداخت ' + formatToman(calc.downPayment) + ' در زمان خرید از درگاه پرداخت دریافت می‌شود.');
             } else {
-                $notice
-                    .removeClass('wcip-notice-has-down')
-                    .addClass('wcip-notice-no-down')
+                $notice.removeClass('wcip-notice-has-down').addClass('wcip-notice-no-down')
                     .text('این محصول بدون پیش‌پرداخت است. کل مبلغ به‌صورت اقساطی پرداخت می‌شود.');
             }
 
             $('#wcip-confirm-modal').css('display', 'flex');
         });
 
-        // Confirm button — add to cart via AJAX then redirect to checkout.
+        // Confirm — AJAX add to cart then redirect to checkout.
         $(document).on('click', '#wcip-confirm-proceed', function () {
-            if (!wcipInstallmentCalc) {
-                return;
-            }
+            if (!wcipInstallmentCalc) return;
 
             var $btn = $(this);
             $btn.prop('disabled', true).text('در حال افزودن...');
 
-            var data = window.wcipData;
-            var $form = $('form.cart');
-            var productId = data.productId;
-            var qty = 1;
-            var $qtyInput = $form.find('input[name="quantity"]');
-            if ($qtyInput.length) {
-                qty = parseInt($qtyInput.val(), 10) || 1;
-            }
-
+            var data       = window.wcipData;
+            var ajax       = window.wcipAjax;
+            var $form      = $('form.cart');
+            var productId  = data.productId;
+            var qty        = 1;
             var variationId = 0;
-            var $varSelect = $form.find('input[name="variation_id"]');
-            if ($varSelect.length) {
-                variationId = parseInt($varSelect.val(), 10) || 0;
+
+            if ($form.length) {
+                var $qtyInput = $form.find('input[name="quantity"]');
+                if ($qtyInput.length) qty = parseInt($qtyInput.val(), 10) || 1;
+                var $varInput = $form.find('input[name="variation_id"]');
+                if ($varInput.length) variationId = parseInt($varInput.val(), 10) || 0;
             }
 
             $.ajax({
-                url: wcipAjax.ajaxUrl,
+                url: ajax.ajaxUrl,
                 type: 'POST',
                 data: {
                     action: 'wcip_add_installment_to_cart',
-                    nonce: wcipAjax.nonce,
+                    nonce: ajax.nonce,
                     product_id: productId,
                     variation_id: variationId,
                     quantity: qty,
@@ -257,7 +228,7 @@
             });
         });
 
-        // Modal close handlers.
+        // Close modal handlers.
         $(document).on('click', '#wcip-confirm-cancel, #wcip-confirm-modal .wcip-modal-close, #wcip-confirm-modal .wcip-modal-overlay', function () {
             $('#wcip-confirm-modal').css('display', 'none');
             wcipInstallmentCalc = null;
@@ -265,19 +236,20 @@
     }
 
     $(document).ready(function () {
-        updateInstallmentDetails();
-
-        // React to payment method change.
-        $(document).on('change', 'input[name="wcip_payment_method"]', function () {
+        if (window.wcipData) {
             updateInstallmentDetails();
-        });
 
-        // React to plan selection change.
-        $(document).on('change', 'input[name="wcip_installment_plan"]', function () {
-            updateInstallmentDetails();
-        });
+            $(document).on('change', 'input[name="wcip_payment_method"]', function () {
+                updateInstallmentDetails();
+            });
+            $(document).on('change', 'input[name="wcip_installment_plan"]', function () {
+                updateInstallmentDetails();
+            });
 
-        hookAddToCart();
+            hookCashButton();
+            hookInstallmentButton();
+        }
+
         initAccountInstallments();
         initNotificationCenter();
         initSettlementPage();

@@ -1408,6 +1408,51 @@
     }
 }
 
+/* ===== Product page action buttons ===== */
+.wcip-action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+.wcip-btn-cash {
+    background: #fff !important;
+    border: 2px solid #2a8a2a !important;
+    color: #2a8a2a !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+    transition: background 0.2s, color 0.2s !important;
+}
+
+.wcip-btn-cash:hover {
+    background: #2a8a2a !important;
+    color: #fff !important;
+}
+
+.wcip-btn-installment {
+    background: #2a8a2a !important;
+    border: 2px solid #2a8a2a !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+    border-radius: 6px !important;
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+    transition: background 0.2s, border-color 0.2s !important;
+}
+
+.wcip-btn-installment:hover {
+    background: #1e6a1e !important;
+    border-color: #1e6a1e !important;
+}
+
+.wcip-btn-installment:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
 /* ===== Checkout/Cart Installment Toggle ===== */
 
 .wcip-checkout-installment-row td {

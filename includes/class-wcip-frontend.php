@@ -14,16 +14,8 @@ if (!class_exists('WCIP_Frontend')) {
 
     class WCIP_Frontend
     {
-        /**
-         * @var WCIP_Frontend|null
-         */
         private static $instance = null;
 
-        /**
-         * Singleton instance.
-         *
-         * @return WCIP_Frontend
-         */
         public static function instance()
         {
             if (null === self::$instance) {
@@ -32,21 +24,20 @@ if (!class_exists('WCIP_Frontend')) {
             return self::$instance;
         }
 
-        /**
-         * Constructor.
-         */
         private function __construct()
         {
-            add_action('woocommerce_single_product_summary', array($this, 'display_payment_selector'), 15);
+            // Hook AFTER the add-to-cart button (priority 35) so our wrapper
+            // appears below the form, avoiding conflicts with form.cart scope.
+            add_action('woocommerce_after_add_to_cart_form', array($this, 'display_payment_selector'), 10);
+
             add_filter('woocommerce_add_cart_item_data', array($this, 'add_cart_item_data'), 10, 3);
             add_filter('woocommerce_get_item_data', array($this, 'get_item_data'), 10, 2);
             add_action('wp_ajax_wcip_add_installment_to_cart', array($this, 'ajax_add_installment_to_cart'));
             add_action('wp_ajax_nopriv_wcip_add_installment_to_cart', array($this, 'ajax_add_installment_to_cart'));
-            add_filter('woocommerce_add_to_cart_redirect', array($this, 'installment_checkout_redirect'), 10, 2);
         }
 
         /**
-         * Renders the payment method selector and installment details section.
+         * Renders the payment method selector (and installment details) below the add-to-cart form.
          */
         public function display_payment_selector()
         {
@@ -56,61 +47,50 @@ if (!class_exists('WCIP_Frontend')) {
                 return;
             }
 
-            $product_id = $product->get_id();
+            $product_id          = $product->get_id();
             $installment_enabled = wcip_is_installment_enabled_for_product($product_id);
+            $price               = floatval($product->get_price());
 
-            $price = floatval($product->get_price());
-            $plans = $installment_enabled ? wcip_get_product_plans($product_id) : array();
-            $settings = $installment_enabled ? wcip_get_product_installment_settings($product_id) : array();
-
-            // Prepare localized data for JS.
-            $js_plans = array();
-            foreach ($plans as $plan) {
-                $js_plans[] = array(
-                    'months'       => intval($plan['months']),
-                    'interestRate' => floatval($plan['interest_rate']),
-                );
+            if ($price <= 0) {
+                return;
             }
 
+            $plans    = $installment_enabled ? wcip_get_product_plans($product_id) : array();
+            $settings = $installment_enabled ? wcip_get_product_installment_settings($product_id) : array();
+
+            $js_plans = array();
             $max_months = 0;
-            foreach ($js_plans as $p) {
-                if ($p['months'] > $max_months) {
-                    $max_months = $p['months'];
+            foreach ($plans as $plan) {
+                $months = intval($plan['months']);
+                $ir     = floatval($plan['interest_rate']);
+                $js_plans[] = array('months' => $months, 'interestRate' => $ir);
+                if ($months > $max_months) {
+                    $max_months = $months;
                 }
             }
 
-            $localized = array(
-                'productId'       => $product_id,
-                'productPrice'    => $price,
-                'enabled'         => $installment_enabled,
-                'downPaymentType' => isset($settings['down_payment_type']) ? $settings['down_payment_type'] : 'percentage',
-                'downPaymentValue'=> isset($settings['down_payment_value']) ? floatval($settings['down_payment_value']) : 0,
-                'feeType'         => isset($settings['fee_type']) ? $settings['fee_type'] : 'percentage',
-                'feeValue'        => isset($settings['fee_value']) ? floatval($settings['fee_value']) : 0,
-                'plans'           => $js_plans,
-                'maxMonths'       => $max_months,
-                'ajaxUrl'         => admin_url('admin-ajax.php'),
-                'nonce'           => wp_create_nonce('wcip-frontend'),
-            );
+            $down_payment_type  = isset($settings['down_payment_type'])  ? $settings['down_payment_type']        : 'percentage';
+            $down_payment_value = isset($settings['down_payment_value'])  ? floatval($settings['down_payment_value']) : 0;
+            $fee_type           = isset($settings['fee_type'])            ? $settings['fee_type']                 : 'percentage';
+            $fee_value          = isset($settings['fee_value'])           ? floatval($settings['fee_value'])      : 0;
 
-            wp_localize_script('wcip-frontend-script', 'wcipData', $localized);
-            wp_localize_script('wcip-frontend-script', 'wcipAjax', array(
-                'ajaxUrl' => admin_url('admin-ajax.php'),
-                'nonce'   => wp_create_nonce('wcip-add-to-cart'),
-            ));
+            $nonce_frontend = wp_create_nonce('wcip-frontend');
+            $nonce_cart     = wp_create_nonce('wcip-add-to-cart');
+            $ajax_url       = admin_url('admin-ajax.php');
             ?>
+            <!-- WCIP: Payment selector (rendered after the add-to-cart form) -->
             <div class="wcip-payment-selector-wrapper" data-product-id="<?php echo esc_attr($product_id); ?>">
                 <h3 class="wcip-section-title"><?php esc_html_e('روش پرداخت', 'wc-installment'); ?></h3>
 
                 <div class="wcip-payment-methods">
                     <label class="wcip-payment-method-option" data-method="cash">
                         <input type="radio" name="wcip_payment_method" value="cash" checked />
-                        <span class="wcip-payment-method-icon">ردیف</span>
+                        <span class="wcip-payment-method-icon">نقدی</span>
                         <span class="wcip-payment-method-label"><?php esc_html_e('پرداخت نقدی', 'wc-installment'); ?></span>
                         <span class="wcip-payment-method-price"><?php echo esc_html(wcip_format_toman($price)); ?></span>
                     </label>
 
-                    <?php if ($installment_enabled) : ?>
+                    <?php if ($installment_enabled && count($js_plans) > 0) : ?>
                     <label class="wcip-payment-method-option" data-method="installment">
                         <input type="radio" name="wcip_payment_method" value="installment" />
                         <span class="wcip-payment-method-icon">اقساط</span>
@@ -120,8 +100,7 @@ if (!class_exists('WCIP_Frontend')) {
                     <?php endif; ?>
                 </div>
 
-                <?php if ($installment_enabled) : ?>
-                <!-- Installment details section (hidden until installment is selected) -->
+                <?php if ($installment_enabled && count($js_plans) > 0) : ?>
                 <div class="wcip-installment-details" style="display:none;">
                     <h4 class="wcip-details-title"><?php esc_html_e('انتخاب طرح اقساطی', 'wc-installment'); ?></h4>
 
@@ -138,7 +117,7 @@ if (!class_exists('WCIP_Frontend')) {
                                     </label>
                                 <?php endforeach; ?>
                             </div>
-                        <?php elseif (count($js_plans) === 1) : ?>
+                        <?php else : ?>
                             <input type="hidden" name="wcip_installment_plan" value="0" />
                             <p class="wcip-single-plan-info">
                                 <?php echo esc_html(sprintf(
@@ -149,23 +128,21 @@ if (!class_exists('WCIP_Frontend')) {
                         <?php endif; ?>
                     </div>
 
-                    <!-- Installment info badges -->
                     <div class="wcip-installment-info-bar">
                         <div class="wcip-info-badge">
                             <span class="wcip-info-badge-label"><?php esc_html_e('حداکثر تعداد اقساط', 'wc-installment'); ?></span>
-                            <span class="wcip-info-badge-value" id="wcip-max-months"><?php echo $installment_enabled && $max_months > 0 ? esc_html(number_to_persian($max_months) . ' ' . __('ماه', 'wc-installment')) : '—'; ?></span>
+                            <span class="wcip-info-badge-value"><?php echo esc_html(number_to_persian($max_months) . ' ' . __('ماه', 'wc-installment')); ?></span>
                         </div>
                         <div class="wcip-info-badge">
                             <span class="wcip-info-badge-label"><?php esc_html_e('نوع کارمزد', 'wc-installment'); ?></span>
-                            <span class="wcip-info-badge-value" id="wcip-fee-type"><?php echo $installment_enabled ? esc_html(isset($settings['fee_type']) && $settings['fee_type'] === 'percentage' ? __('درصدی', 'wc-installment') : __('مبلغ ثابت', 'wc-installment')) : '—'; ?></span>
+                            <span class="wcip-info-badge-value"><?php echo esc_html($fee_type === 'percentage' ? __('درصدی', 'wc-installment') : __('مبلغ ثابت', 'wc-installment')); ?></span>
                         </div>
                         <div class="wcip-info-badge">
                             <span class="wcip-info-badge-label"><?php esc_html_e('مقدار کارمزد', 'wc-installment'); ?></span>
-                            <span class="wcip-info-badge-value" id="wcip-fee-value"><?php echo $installment_enabled ? esc_html(isset($settings['fee_type']) && $settings['fee_type'] === 'percentage' ? number_to_persian(floatval(isset($settings['fee_value']) ? $settings['fee_value'] : 0)) . '٪' : wcip_format_toman(isset($settings['fee_value']) ? $settings['fee_value'] : 0)) : '—'; ?></span>
+                            <span class="wcip-info-badge-value"><?php echo esc_html($fee_type === 'percentage' ? number_to_persian($fee_value) . '٪' : wcip_format_toman($fee_value)); ?></span>
                         </div>
                     </div>
 
-                    <!-- Dynamic installment breakdown -->
                     <div class="wcip-installment-breakdown">
                         <div class="wcip-breakdown-row">
                             <span class="wcip-breakdown-label"><?php esc_html_e('مبلغ پیش‌پرداخت', 'wc-installment'); ?></span>
@@ -196,16 +173,23 @@ if (!class_exists('WCIP_Frontend')) {
                         </div>
                     </div>
 
-                    <!-- Validation error message -->
                     <div class="wcip-validation-error" id="wcip-plan-error" style="display:none;">
                         <?php esc_html_e('لطفاً یک طرح اقساطی انتخاب کنید.', 'wc-installment'); ?>
                     </div>
-
-                    <!-- Hidden field for cart data -->
-                    <input type="hidden" name="wcip_selected_plan" id="wcip-selected-plan" value="" />
-                    <input type="hidden" name="wcip_selected_method" id="wcip-selected-method" value="cash" />
                 </div>
                 <?php endif; ?>
+
+                <!-- Add-to-cart buttons for this widget -->
+                <div class="wcip-action-buttons" style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button type="button" class="button alt wcip-btn-cash single_add_to_cart_button" id="wcip-add-cash-btn" data-product-id="<?php echo esc_attr($product_id); ?>">
+                        <?php esc_html_e('افزودن نقدی به سبد', 'wc-installment'); ?>
+                    </button>
+                    <?php if ($installment_enabled && count($js_plans) > 0) : ?>
+                    <button type="button" class="button alt wcip-btn-installment" id="wcip-add-installment-btn" data-product-id="<?php echo esc_attr($product_id); ?>">
+                        <?php esc_html_e('خرید اقساطی', 'wc-installment'); ?>
+                    </button>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <!-- Installment confirmation modal -->
@@ -247,36 +231,41 @@ if (!class_exists('WCIP_Frontend')) {
                     </div>
                 </div>
             </div>
+
+            <!-- Inline JS data — avoids wp_localize_script timing issues -->
+            <script type="text/javascript">
+            window.wcipData = <?php echo wp_json_encode(array(
+                'productId'        => $product_id,
+                'productPrice'     => $price,
+                'enabled'          => $installment_enabled,
+                'downPaymentType'  => $down_payment_type,
+                'downPaymentValue' => $down_payment_value,
+                'feeType'          => $fee_type,
+                'feeValue'         => $fee_value,
+                'plans'            => $js_plans,
+                'maxMonths'        => $max_months,
+            )); ?>;
+            window.wcipAjax = <?php echo wp_json_encode(array(
+                'ajaxUrl' => $ajax_url,
+                'nonce'   => $nonce_cart,
+            )); ?>;
+            </script>
             <?php
         }
 
         /**
-         * Adds installment selection data to cart item when added to cart.
-         *
-         * @param array $cart_item_data Cart item data.
-         * @param int   $product_id     Product ID.
-         * @param int   $variation_id   Variation ID.
-         * @return array
+         * Adds installment selection data to cart item when added via normal form submit.
          */
         public function add_cart_item_data($cart_item_data, $product_id, $variation_id)
         {
             $payment_method = isset($_POST['wcip_selected_method']) ? sanitize_text_field(wp_unslash($_POST['wcip_selected_method'])) : 'cash';
-            $selected_plan = isset($_POST['wcip_selected_plan']) ? sanitize_text_field(wp_unslash($_POST['wcip_selected_plan'])) : '';
-
-            if (function_exists('wcip_debug_log')) {
-                wcip_debug_log('add_cart_item_data: checking POST data', array(
-                    'product_id'     => $product_id,
-                    'payment_method'  => $payment_method,
-                    'selected_plan'   => $selected_plan,
-                    'has_post_data'   => !empty($_POST) ? 'yes' : 'no',
-                ));
-            }
+            $selected_plan  = isset($_POST['wcip_selected_plan'])  ? sanitize_text_field(wp_unslash($_POST['wcip_selected_plan']))  : '';
 
             if ($payment_method === 'installment' && $selected_plan !== '') {
                 $cart_item_data['wcip_payment_method'] = 'installment';
-                $cart_item_data['wcip_selected_plan'] = $selected_plan;
+                $cart_item_data['wcip_selected_plan']  = $selected_plan;
 
-                $plans = wcip_get_product_plans($product_id);
+                $plans    = wcip_get_product_plans($product_id);
                 $plan_idx = intval($selected_plan);
                 if (isset($plans[$plan_idx])) {
                     $plan = $plans[$plan_idx];
@@ -286,18 +275,17 @@ if (!class_exists('WCIP_Frontend')) {
                         $plan['interest_rate']
                     );
                     if ($calc) {
-                        $cart_item_data['wcip_plan_months'] = $plan['months'];
-                        $cart_item_data['wcip_plan_interest'] = $plan['interest_rate'];
-                        $cart_item_data['wcip_down_payment'] = $calc['down_payment'];
-                        $cart_item_data['wcip_monthly_installment'] = $calc['monthly_installment'];
-                        $cart_item_data['wcip_total_payable'] = $calc['total_payable'];
+                        $cart_item_data['wcip_plan_months']          = $plan['months'];
+                        $cart_item_data['wcip_plan_interest']        = $plan['interest_rate'];
+                        $cart_item_data['wcip_down_payment']         = $calc['down_payment'];
+                        $cart_item_data['wcip_monthly_installment']  = $calc['monthly_installment'];
+                        $cart_item_data['wcip_total_payable']        = $calc['total_payable'];
                     }
                 }
             } else {
                 $cart_item_data['wcip_payment_method'] = 'cash';
             }
 
-            // Ensure unique cart item.
             if (!isset($cart_item_data['unique_key'])) {
                 $cart_item_data['unique_key'] = md5(microtime() . rand());
             }
@@ -306,11 +294,7 @@ if (!class_exists('WCIP_Frontend')) {
         }
 
         /**
-         * Displays installment info in cart item data (the meta line below product name).
-         *
-         * @param array $item_data Existing item data.
-         * @param array $cart_item  Cart item array.
-         * @return array
+         * Displays installment info in cart item data.
          */
         public function get_item_data($item_data, $cart_item)
         {
@@ -318,47 +302,31 @@ if (!class_exists('WCIP_Frontend')) {
                 return $item_data;
             }
 
-            $months = isset($cart_item['wcip_plan_months']) ? $cart_item['wcip_plan_months'] : 0;
-            $monthly = isset($cart_item['wcip_monthly_installment']) ? $cart_item['wcip_monthly_installment'] : 0;
-            $down = isset($cart_item['wcip_down_payment']) ? $cart_item['wcip_down_payment'] : 0;
-            $total = isset($cart_item['wcip_total_payable']) ? $cart_item['wcip_total_payable'] : 0;
+            $months  = isset($cart_item['wcip_plan_months'])         ? $cart_item['wcip_plan_months']         : 0;
+            $monthly = isset($cart_item['wcip_monthly_installment'])  ? $cart_item['wcip_monthly_installment']  : 0;
+            $down    = isset($cart_item['wcip_down_payment'])         ? $cart_item['wcip_down_payment']         : 0;
+            $total   = isset($cart_item['wcip_total_payable'])        ? $cart_item['wcip_total_payable']        : 0;
 
-            $item_data[] = array(
-                'key'   => __('روش پرداخت', 'wc-installment'),
-                'value' => __('اقساطی', 'wc-installment'),
-            );
-            $item_data[] = array(
-                'key'   => __('پیش‌پرداخت', 'wc-installment'),
-                'value' => wcip_format_toman($down),
-            );
-            $item_data[] = array(
-                'key'   => __('مبلغ هر قسط', 'wc-installment'),
-                'value' => wcip_format_toman($monthly),
-            );
-            $item_data[] = array(
-                'key'   => __('تعداد اقساط', 'wc-installment'),
-                'value' => number_to_persian($months) . ' ' . __('ماه', 'wc-installment'),
-            );
-            $item_data[] = array(
-                'key'   => __('مجموع قابل پرداخت', 'wc-installment'),
-                'value' => wcip_format_toman($total),
-            );
+            $item_data[] = array('key' => __('روش پرداخت', 'wc-installment'),       'value' => __('اقساطی', 'wc-installment'));
+            $item_data[] = array('key' => __('پیش‌پرداخت', 'wc-installment'),        'value' => wcip_format_toman($down));
+            $item_data[] = array('key' => __('مبلغ هر قسط', 'wc-installment'),      'value' => wcip_format_toman($monthly));
+            $item_data[] = array('key' => __('تعداد اقساط', 'wc-installment'),       'value' => number_to_persian($months) . ' ' . __('ماه', 'wc-installment'));
+            $item_data[] = array('key' => __('مجموع قابل پرداخت', 'wc-installment'), 'value' => wcip_format_toman($total));
 
             return $item_data;
         }
 
         /**
-         * AJAX handler: adds an installment-mode product to cart and returns
-         * the checkout URL (so the customer skips the cart page entirely).
+         * AJAX: add an installment-mode product to cart and return checkout URL.
          */
         public function ajax_add_installment_to_cart()
         {
             check_ajax_referer('wcip-add-to-cart', 'nonce');
 
-            $product_id  = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+            $product_id   = isset($_POST['product_id'])   ? intval($_POST['product_id'])   : 0;
             $variation_id = isset($_POST['variation_id']) ? intval($_POST['variation_id']) : 0;
-            $quantity    = isset($_POST['quantity']) ? intval($_POST['quantity']) : 1;
-            $plan_idx    = isset($_POST['plan_idx']) ? intval($_POST['plan_idx']) : 0;
+            $quantity     = isset($_POST['quantity'])      ? intval($_POST['quantity'])      : 1;
+            $plan_idx     = isset($_POST['plan_idx'])      ? intval($_POST['plan_idx'])      : 0;
 
             if ($product_id < 1) {
                 wp_send_json_error(array('message' => __('محصول نامعتبر.', 'wc-installment')));
@@ -393,12 +361,12 @@ if (!class_exists('WCIP_Frontend')) {
 
             if (function_exists('wcip_debug_log')) {
                 wcip_debug_log('AJAX add-to-cart: adding installment item', array(
-                    'product_id'   => $product_id,
-                    'plan_idx'     => $plan_idx,
-                    'months'       => $plan['months'],
-                    'down_payment' => $calc['down_payment'],
-                    'monthly'      => $calc['monthly_installment'],
-                    'total_payable'=> $calc['total_payable'],
+                    'product_id'    => $product_id,
+                    'plan_idx'      => $plan_idx,
+                    'months'        => $plan['months'],
+                    'down_payment'  => $calc['down_payment'],
+                    'monthly'       => $calc['monthly_installment'],
+                    'total_payable' => $calc['total_payable'],
                 ));
             }
 
@@ -412,58 +380,20 @@ if (!class_exists('WCIP_Frontend')) {
 
             if (!$cart_item_key) {
                 if (function_exists('wcip_debug_log')) {
-                    wcip_debug_log('AJAX add-to-cart: add_to_cart failed', array(
-                        'product_id' => $product_id,
-                        'wc_errors'  => WC()->cart->get_cart_errors() ? 'yes' : 'no',
-                    ));
+                    wcip_debug_log('AJAX add-to-cart: add_to_cart failed', array('product_id' => $product_id));
                 }
                 wp_send_json_error(array('message' => __('خطا در افزودن به سبد.', 'wc-installment')));
             }
 
             WC()->cart->calculate_totals();
 
-            if (function_exists('wcip_debug_log')) {
-                wcip_debug_log('AJAX add-to-cart: success, redirecting to checkout', array(
-                    'cart_item_key' => $cart_item_key,
-                    'cart_count'    => count(WC()->cart->get_cart()),
-                ));
-            }
-
-            wp_send_json_success(array(
-                'redirect_url' => wc_get_checkout_url(),
-            ));
-        }
-
-        /**
-         * Redirects installment-mode add-to-cart directly to checkout
-         * (so the customer never lands on the cart page for installment items).
-         *
-         * @param string     $url      Current redirect URL.
-         * @param int|string $product_id Product ID being added.
-         * @return string
-         */
-        public function installment_checkout_redirect($url, $product_id)
-        {
-            if (!WC()->cart) {
-                return $url;
-            }
-
-            foreach (WC()->cart->get_cart() as $cart_item) {
-                if (!empty($cart_item['wcip_payment_method']) && $cart_item['wcip_payment_method'] === 'installment') {
-                    return wc_get_checkout_url();
-                }
-            }
-
-            return $url;
+            wp_send_json_success(array('redirect_url' => wc_get_checkout_url()));
         }
     }
 }
 
 /**
  * Converts a number string to Persian digits.
- *
- * @param int|float|string $number Number to convert.
- * @return string
  */
 function number_to_persian($number)
 {

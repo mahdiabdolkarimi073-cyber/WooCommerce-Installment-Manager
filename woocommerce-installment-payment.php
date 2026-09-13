@@ -153,6 +153,9 @@ function wcip_init_plugin()
     // Early settlement (customer request + admin approval with discount)
     require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-settlement.php';
 
+    // Debug & logs admin page
+    require_once WCIP_PLUGIN_DIR . 'includes/class-wcip-debug.php';
+
     // Register the installment payment gateway with WooCommerce.
     add_filter('woocommerce_payment_gateways', 'wcip_register_installment_gateway');
 
@@ -174,6 +177,7 @@ function wcip_init_plugin()
     WCIP_Reminders::instance();
     WCIP_Reports::instance();
     WCIP_Settlement::instance();
+    WCIP_Debug::instance();
 }
 add_action('plugins_loaded', 'wcip_init_plugin');
 
